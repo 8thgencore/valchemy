@@ -4,6 +4,7 @@ import (
 	"strings"
 )
 
+// Функция для парсинга команды
 func ParseCommand(command string) (string, []string) {
 	parts := strings.Fields(command)
 	if len(parts) == 0 {
