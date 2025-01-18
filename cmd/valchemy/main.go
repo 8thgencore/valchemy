@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	log := logger.New()
+	log := logger.New("development")
 	engine := storage.NewEngine()
 	handler := compute.NewHandler(engine, log)
 
