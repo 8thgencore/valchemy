@@ -1,0 +1,11 @@
+version: '3'
+
+tasks:
+  install:global:
+    desc: Install global development dependencies
+    cmds:
+      - go install github.com/air-verse/air@latest
+      - go install github.com/pressly/goose/v3/cmd/goose@latest
+      - go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+      - go install mvdan.cc/gofumpt@latest
+      - go install github.com/yoheimuta/protolint/cmd/protolint@latest

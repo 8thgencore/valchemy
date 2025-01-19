@@ -1,0 +1,22 @@
+version: '3'
+
+tasks:
+  lint:
+    desc: Run linter on the codebase
+    cmds:
+      - golangci-lint run ./internal/... ./cmd/... ./pkg/... -c .golangci.yaml --fix
+
+  format:
+    desc: Format Go code using gofumpt
+    cmds:
+      - gofumpt -l -w .
+
+  protolint:
+    desc: Lint protobuf files
+    cmds:
+      - protolint lint api/*
+
+  run:
+    desc: Run application in development mode with hot reload
+    cmds:
+      - air

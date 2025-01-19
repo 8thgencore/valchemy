@@ -1,9 +1,8 @@
 package logger
 
 import (
-	"os"
-
 	"log/slog"
+	"os"
 )
 
 // Logger interface for logging

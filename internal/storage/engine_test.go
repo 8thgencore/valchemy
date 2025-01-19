@@ -44,7 +44,7 @@ func TestEngine(t *testing.T) {
 		engine.Delete("nonexistent")
 	})
 
-	t.Run("Concurrent operations", func(t *testing.T) {
+	t.Run("Concurrent operations", func(_ *testing.T) {
 		engine := NewEngine()
 		done := make(chan bool)
 
