@@ -2,19 +2,19 @@ package compute
 
 import (
 	"errors"
+	"log/slog"
 
 	"github.com/8thgencore/valchemy/internal/storage"
-	"github.com/8thgencore/valchemy/pkg/logger"
 )
 
 // Handler is a struct that handles commands
 type Handler struct {
 	engine *storage.Engine
-	log    logger.Logger
+	log    *slog.Logger
 }
 
 // NewHandler creates a new Handler
-func NewHandler(engine *storage.Engine, log logger.Logger) *Handler {
+func NewHandler(engine *storage.Engine, log *slog.Logger) *Handler {
 	return &Handler{engine: engine, log: log}
 }
 

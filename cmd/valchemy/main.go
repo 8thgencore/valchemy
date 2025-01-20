@@ -7,12 +7,15 @@ import (
 	"strings"
 
 	"github.com/8thgencore/valchemy/internal/compute"
+	"github.com/8thgencore/valchemy/internal/config"
 	"github.com/8thgencore/valchemy/internal/storage"
 	"github.com/8thgencore/valchemy/pkg/logger"
 )
 
 func main() {
-	log := logger.New("development")
+	config := config.NewConfig(config.Development)
+	log := logger.New(config.Env)
+
 	engine := storage.NewEngine()
 	handler := compute.NewHandler(engine, log)
 
