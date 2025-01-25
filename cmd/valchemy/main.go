@@ -10,6 +10,7 @@ import (
 	"github.com/8thgencore/valchemy/internal/config"
 	"github.com/8thgencore/valchemy/internal/storage"
 	"github.com/8thgencore/valchemy/pkg/logger"
+	"github.com/8thgencore/valchemy/pkg/logger/sl"
 )
 
 func main() {
@@ -33,7 +34,7 @@ func main() {
 
 		response, err := handler.Handle(input)
 		if err != nil {
-			log.Error(err.Error())
+			log.Error("Failed handle a command", sl.Err(err))
 			continue
 		}
 		fmt.Println(response)

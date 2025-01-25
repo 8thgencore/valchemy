@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/8thgencore/valchemy/internal/storage"
+	"github.com/8thgencore/valchemy/pkg/logger/sl"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -47,7 +48,7 @@ func TestHandler(t *testing.T) {
 	t.Run("GET nonexistent key", func(t *testing.T) {
 		result, err := handler.Handle("GET nonexistent")
 		assert.Error(t, err)
-		assert.Equal(t, "key not found", err.Error())
+		assert.Equal(t, "key not found", sl.Err(err))
 		assert.Empty(t, result)
 	})
 }
