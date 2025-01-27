@@ -10,10 +10,10 @@ import (
 )
 
 // New creates a new logger with configured formatting and logging level
-func New(env config.Environment) *slog.Logger {
+func New(env config.Env) *slog.Logger {
 	var log *slog.Logger
 
-	if env == config.Production {
+	if env == config.Prod {
 		slogOpts := &slog.HandlerOptions{
 			AddSource: true,
 			Level:     slog.LevelInfo,
