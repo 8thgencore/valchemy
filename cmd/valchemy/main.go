@@ -14,11 +14,16 @@ import (
 )
 
 func main() {
-	config := config.NewConfig(config.Development)
+	config, err := config.NewConfig()
+	if err != nil {
+		fmt.Println("Failed to create config", sl.Err(err))
+		return
+	}
+
 	log := logger.New(config.Env)
 
 	engine := storage.NewEngine()
-	handler := compute.NewHandler(engine, log)
+	handler := compute.NewHandler(log, engine)
 
 	reader := bufio.NewReader(os.Stdin)
 	log.Info("Starting Valchemy. Type 'exit' to quit.")

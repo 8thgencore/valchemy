@@ -16,7 +16,7 @@ func TestHandler(t *testing.T) {
 		Level: slog.LevelDebug,
 	}))
 
-	handler := NewHandler(engine, testLogger)
+	handler := NewHandler(testLogger, engine)
 
 	t.Run("SET command", func(t *testing.T) {
 		result, err := handler.Handle("SET key1 value1")

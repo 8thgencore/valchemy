@@ -9,13 +9,13 @@ import (
 
 // Handler is a struct that handles commands
 type Handler struct {
-	engine *storage.Engine
 	log    *slog.Logger
+	engine *storage.Engine
 }
 
 // NewHandler creates a new Handler
-func NewHandler(engine *storage.Engine, log *slog.Logger) *Handler {
-	return &Handler{engine: engine, log: log}
+func NewHandler(log *slog.Logger, engine *storage.Engine) *Handler {
+	return &Handler{log: log, engine: engine}
 }
 
 // Handle handles a command
