@@ -7,6 +7,8 @@ import (
 	"net"
 	"os"
 	"strings"
+
+	"github.com/8thgencore/valchemy/pkg/constants"
 )
 
 // Client represents a client for connecting to the server
@@ -83,7 +85,7 @@ func (c *Client) sendCommand(command string) error {
 	}
 
 	// Remove the end marker and print the response
-	responseStr := strings.TrimSuffix(response.String(), "\x00")
+	responseStr := strings.TrimSuffix(response.String(), constants.EndMarker)
 	fmt.Print(responseStr)
 
 	return nil
