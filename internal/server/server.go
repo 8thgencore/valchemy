@@ -102,7 +102,7 @@ func (s *Server) canAcceptConnection() bool {
 	s.connCountLock.Lock()
 	defer s.connCountLock.Unlock()
 
-	if s.connCount >= int32(s.config.MaxConnections) {
+	if int(s.connCount) >= s.config.MaxConnections {
 		return false
 	}
 

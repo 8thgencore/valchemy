@@ -1,14 +1,10 @@
 package config
 
 import (
-	"flag"
 	"fmt"
-	"log"
-	"os"
 	"time"
 
 	"github.com/ilyakaznacheev/cleanenv"
-	"github.com/joho/godotenv"
 )
 
 // Env type for environment
@@ -49,38 +45,18 @@ type LoggingConfig struct {
 }
 
 // NewConfig creates a new instance of Config.
-func NewConfig() (*Config, error) {
-	configPath := fetchConfigPath()
-
+func NewConfig(path string) (*Config, error) {
 	cfg := &Config{}
-	var err error
 
-	if configPath != "" {
-		err = godotenv.Load(configPath)
-	} else {
-		err = godotenv.Load()
-	}
-	if err != nil {
-		log.Printf("No loading .env file: %v", err)
+	// Load configuration from yaml file
+	if err := cleanenv.ReadConfig(path, cfg); err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	if err = cleanenv.ReadEnv(cfg); err != nil {
-		return nil, fmt.Errorf("error reading env: %w", err)
+	// Load environment variables
+	if err := cleanenv.ReadEnv(cfg); err != nil {
+		return nil, fmt.Errorf("failed to read env variables: %w", err)
 	}
-	log.Printf("Load environment: %s", cfg.Env)
 
 	return cfg, nil
-}
-
-func fetchConfigPath() string {
-	var configPath string
-	flag.StringVar(&configPath, "config", ".env", "Path to config file")
-
-	flag.Parse()
-
-	if configPath == "" {
-		configPath = os.Getenv("CONFIG_PATH")
-	}
-
-	return configPath
 }

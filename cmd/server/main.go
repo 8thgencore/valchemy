@@ -1,32 +1,28 @@
 package main
 
 import (
-	"fmt"
+	"flag"
+	"log"
 	"os"
 
-	"github.com/8thgencore/valchemy/internal/compute"
-	"github.com/8thgencore/valchemy/internal/config"
-	"github.com/8thgencore/valchemy/internal/server"
-	"github.com/8thgencore/valchemy/internal/storage"
-	"github.com/8thgencore/valchemy/pkg/logger"
-	"github.com/8thgencore/valchemy/pkg/logger/sl"
+	"github.com/8thgencore/valchemy/internal/app"
 )
 
 func main() {
-	config, err := config.NewConfig()
+	// Parse command line flags
+	configPath := flag.String("config", "config.yaml", "path to config file")
+	flag.Parse()
+
+	// Create and run application
+	application, err := app.New(*configPath)
 	if err != nil {
-		fmt.Println("Failed to create config", sl.Err(err))
+		log.Printf("Failed to initialize application: %v", err)
 		os.Exit(1)
 	}
 
-	log := logger.New(config.Env)
-
-	engine := storage.NewEngine()
-	handler := compute.NewHandler(log, engine)
-
-	srv := server.NewServer(log, &config.Network, handler)
-	if err := srv.Start(); err != nil {
-		log.Error("Server failed to start", sl.Err(err))
+	// Run application
+	if err := application.Run(); err != nil {
+		log.Printf("Application error: %v", err)
 		os.Exit(1)
 	}
 }
