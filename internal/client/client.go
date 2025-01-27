@@ -36,10 +36,7 @@ func (c *Client) Connect() error {
 func (c *Client) Run() error {
 	defer func() {
 		if c.conn != nil {
-			err := c.conn.Close()
-			if err != nil {
-				fmt.Printf("Failed to close connection: %v\n", err)
-			}
+			_ = c.conn.Close()
 		}
 	}()
 
@@ -57,7 +54,7 @@ func (c *Client) Run() error {
 		}
 
 		if err := c.sendCommand(input); err != nil {
-			return err
+			return fmt.Errorf("command error: %w", err)
 		}
 	}
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/8thgencore/valchemy/internal/compute"
 	"github.com/8thgencore/valchemy/internal/config"
+	"github.com/8thgencore/valchemy/pkg/logger/sl"
 )
 
 // Server is the server struct
@@ -43,7 +44,7 @@ func (s *Server) Start() error {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			s.log.Error("Failed to accept connection", "error", err)
+			s.log.Error("Failed to accept connection", sl.Err(err))
 			continue
 		}
 
@@ -51,7 +52,7 @@ func (s *Server) Start() error {
 			s.log.Warn("Max connections reached, rejecting connection")
 			err := conn.Close()
 			if err != nil {
-				s.log.Error("Failed to close connection", "error", err)
+				s.log.Error("Failed to close connection", sl.Err(err))
 			}
 
 			continue
@@ -67,7 +68,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 	defer func() {
 		err := conn.Close()
 		if err != nil {
-			s.log.Error("Failed to close connection", "error", err)
+			s.log.Error("Failed to close connection", sl.Err(err))
 		}
 		s.connections.Done()
 		s.decrementConnCount()
@@ -79,7 +80,12 @@ func (s *Server) handleConnection(conn net.Conn) {
 	for {
 		input, err := reader.ReadString('\n')
 		if err != nil {
-			s.log.Error("Failed to read from connection", "error", err)
+			if err.Error() == "EOF" {
+				s.log.Info("Client disconnected", "remote_addr", conn.RemoteAddr())
+				return
+			}
+			s.log.Error("Failed to read from connection", sl.Err(err))
+
 			return
 		}
 
@@ -91,7 +97,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		}
 
 		if _, err := conn.Write([]byte(response)); err != nil {
-			s.log.Error("Failed to write response", "error", err)
+			s.log.Error("Failed to write response", sl.Err(err))
 			return
 		}
 	}
