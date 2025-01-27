@@ -27,8 +27,16 @@ func ParseCommand(input string) (Command, error) {
 		return Command{}, ErrInvalidFormat
 	}
 
+	// Convert command to uppercase for case-insensitive comparison
+	cmdType := strings.ToUpper(parts[0])
+
+	// Special case for "?" as help command
+	if cmdType == "?" {
+		cmdType = CommandHelp
+	}
+
 	cmd := Command{
-		Type: parts[0],
+		Type: cmdType,
 		Args: parts[1:],
 	}
 
@@ -41,17 +49,19 @@ func ParseCommand(input string) (Command, error) {
 
 // validateCommand validates a command
 func validateCommand(cmd Command) error {
-	if len(cmd.Args) < 1 {
-		return ErrInvalidFormat
-	}
-
 	switch cmd.Type {
 	case CommandSet:
 		if len(cmd.Args) != 2 {
 			return ErrInvalidSetFormat
 		}
 	case CommandGet, CommandDel:
-		// These commands require only one argument
+		if len(cmd.Args) != 1 {
+			return ErrInvalidFormat
+		}
+	case CommandHelp, "?":
+		if len(cmd.Args) != 0 {
+			return ErrInvalidFormat
+		}
 	default:
 		return ErrUnknownCommand
 	}

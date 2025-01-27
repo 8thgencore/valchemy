@@ -28,6 +28,9 @@ func (h *Handler) Handle(input string) (string, error) {
 	}
 
 	switch cmd.Type {
+	case CommandHelp:
+		return HelpMessage, nil
+
 	case CommandSet:
 		h.engine.Set(cmd.Args[0], cmd.Args[1])
 		return ResponseOK, nil

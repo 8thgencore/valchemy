@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"strings"
 	"sync"
 
 	"github.com/8thgencore/valchemy/internal/compute"
 	"github.com/8thgencore/valchemy/internal/config"
+	"github.com/8thgencore/valchemy/pkg/constants"
 	"github.com/8thgencore/valchemy/pkg/logger/sl"
 )
 
@@ -89,12 +91,13 @@ func (s *Server) handleConnection(conn net.Conn) {
 			return
 		}
 
-		response, err := s.handler.Handle(input)
+		response, err := s.handler.Handle(strings.TrimSpace(input))
 		if err != nil {
-			response = fmt.Sprintf("ERROR: %s\n", err)
-		} else {
-			response = response + "\n"
+			response = fmt.Sprintf("ERROR: %s", err)
 		}
+
+		// Add a special end message marker
+		response = response + "\n" + constants.EndMarker
 
 		if _, err := conn.Write([]byte(response)); err != nil {
 			s.log.Error("Failed to write response", sl.Err(err))

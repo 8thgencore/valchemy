@@ -2,6 +2,7 @@ package client
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"net"
 	"os"
@@ -41,7 +42,7 @@ func (c *Client) Run() error {
 	}()
 
 	reader := bufio.NewReader(os.Stdin)
-	fmt.Println("Connected to Valchemy server. Type 'exit' to quit.")
+	fmt.Println("Connected to Valchemy server. Type 'help' or '?' for available commands.")
 
 	for {
 		fmt.Print("> ")
@@ -61,16 +62,29 @@ func (c *Client) Run() error {
 
 // sendCommand sends a command to the server and receives a response
 func (c *Client) sendCommand(command string) error {
+	// Send command to server
 	if _, err := fmt.Fprintf(c.conn, "%s\n", command); err != nil {
 		return fmt.Errorf("failed to send command: %w", err)
 	}
 
-	response, err := bufio.NewReader(c.conn).ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("failed to read response: %w", err)
+	// Read the full response until the end marker
+	var response strings.Builder
+	buffer := make([]byte, 1024)
+	for {
+		n, err := c.conn.Read(buffer)
+		if err != nil {
+			return fmt.Errorf("failed to read response: %w", err)
+		}
+
+		response.Write(buffer[:n])
+		if bytes.Contains(buffer[:n], []byte{0}) {
+			break
+		}
 	}
 
-	fmt.Print(response)
+	// Remove the end marker and print the response
+	responseStr := strings.TrimSuffix(response.String(), "\x00")
+	fmt.Print(responseStr)
 
 	return nil
 }
