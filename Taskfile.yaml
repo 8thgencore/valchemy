@@ -1,0 +1,11 @@
+version: '3'
+
+includes:
+  deps: ./taskfiles/deps.yml
+  dev: ./taskfiles/dev.yml
+  test: ./taskfiles/test.yml
+
+tasks:
+  default:
+    cmds:
+      - task --list
