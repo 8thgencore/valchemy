@@ -7,6 +7,7 @@ import (
 
 	"github.com/8thgencore/valchemy/internal/config"
 	"github.com/8thgencore/valchemy/internal/wal/entry"
+	"github.com/8thgencore/valchemy/internal/wal/segment"
 )
 
 // Service represents the Write-Ahead Log
@@ -15,7 +16,7 @@ type Service struct {
 	batch          []entry.Entry
 	batchMu        sync.Mutex
 	quit           chan struct{}
-	currentSegment *segment
+	currentSegment *segment.Segment
 }
 
 // Recovery represents the recovery functionality for WAL
@@ -31,7 +32,7 @@ func New(cfg config.WALConfig) (*Service, error) {
 		return nil, nil
 	}
 
-	segment, err := newSegment(cfg.DataDirectory)
+	segment, err := segment.NewSegment(cfg.DataDirectory)
 	if err != nil {
 		return nil, err
 	}
@@ -69,18 +70,18 @@ func (w *Service) flushBatch() error {
 	}
 
 	for _, entry := range w.batch {
-		if err := w.currentSegment.write(entry); err != nil {
+		if err := w.currentSegment.Write(entry); err != nil {
 			return err
 		}
 
-		if w.currentSegment.size >= w.config.MaxSegmentSizeBytes {
+		if w.currentSegment.Size() >= w.config.MaxSegmentSizeBytes {
 			if err := w.rotateSegment(); err != nil {
 				return err
 			}
 		}
 	}
 
-	if err := w.currentSegment.sync(); err != nil {
+	if err := w.currentSegment.Sync(); err != nil {
 		return fmt.Errorf("failed to sync WAL: %w", err)
 	}
 
@@ -91,11 +92,11 @@ func (w *Service) flushBatch() error {
 
 // rotateSegment creates a new segment and closes the current one
 func (w *Service) rotateSegment() error {
-	if err := w.currentSegment.close(); err != nil {
+	if err := w.currentSegment.Close(); err != nil {
 		return fmt.Errorf("failed to close current segment: %w", err)
 	}
 
-	segment, err := newSegment(w.config.DataDirectory)
+	segment, err := segment.NewSegment(w.config.DataDirectory)
 	if err != nil {
 		return err
 	}
@@ -133,20 +134,20 @@ func (w *Service) Close() error {
 		return fmt.Errorf("failed to flush final batch: %w", err)
 	}
 
-	return w.currentSegment.close()
+	return w.currentSegment.Close()
 }
 
 // Recover reads all WAL segments and returns entries for recovery
 func (w *Service) Recover() ([]*entry.Entry, error) {
 	var entries []*entry.Entry
 
-	segments, err := listSegments(w.config.DataDirectory)
+	segments, err := segment.ListSegments(w.config.DataDirectory)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, segment := range segments {
-		segmentEntries, err := readSegmentEntries(w.config.DataDirectory, segment)
+	for _, s := range segments {
+		segmentEntries, err := segment.ReadSegmentEntries(w.config.DataDirectory, s)
 		if err != nil {
 			return nil, err
 		}

@@ -1,4 +1,4 @@
-package wal
+package segment
 
 import (
 	"bufio"
@@ -13,16 +13,16 @@ import (
 	"github.com/8thgencore/valchemy/internal/wal/entry"
 )
 
-// segment represents a WAL segment file
-type segment struct {
+// Segment represents a WAL Segment file
+type Segment struct {
 	file     *os.File
 	writer   *bufio.Writer
 	size     uint64
 	filename string
 }
 
-// newSegment creates a new WAL segment
-func newSegment(directory string) (*segment, error) {
+// NewSegment creates a new WAL segment
+func NewSegment(directory string) (*Segment, error) {
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create WAL directory: %w", err)
 	}
@@ -39,15 +39,15 @@ func newSegment(directory string) (*segment, error) {
 
 	writer := bufio.NewWriter(file)
 
-	return &segment{
+	return &Segment{
 		file:     file,
 		writer:   writer,
 		filename: filename,
 	}, nil
 }
 
-// write writes data to the segment and updates its size
-func (s *segment) write(entry entry.Entry) error {
+// Write writes data to the segment and updates its size
+func (s *Segment) Write(entry entry.Entry) error {
 	n, err := entry.WriteTo(s.writer)
 	if err != nil {
 		return fmt.Errorf("failed to write entry: %w", err)
@@ -57,8 +57,8 @@ func (s *segment) write(entry entry.Entry) error {
 	return nil
 }
 
-// sync ensures all data is written to disk
-func (s *segment) sync() error {
+// Sync ensures all data is written to disk
+func (s *Segment) Sync() error {
 	if err := s.writer.Flush(); err != nil {
 		return fmt.Errorf("failed to flush buffer: %w", err)
 	}
@@ -66,14 +66,19 @@ func (s *segment) sync() error {
 	return s.file.Sync()
 }
 
-// close closes the segment file
-func (s *segment) close() error {
+// Close closes the segment file
+func (s *Segment) Close() error {
 	_ = s.writer.Flush()
 	return s.file.Close()
 }
 
-// listSegments returns a sorted list of WAL segment files
-func listSegments(directory string) ([]string, error) {
+// Size returns the size of the segment
+func (s *Segment) Size() uint64 {
+	return s.size
+}
+
+// ListSegments returns a sorted list of WAL segment files
+func ListSegments(directory string) ([]string, error) {
 	files, err := os.ReadDir(directory)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read WAL directory: %w", err)
@@ -90,8 +95,8 @@ func listSegments(directory string) ([]string, error) {
 	return segments, nil
 }
 
-// readSegmentEntries reads all entries from the given segment file
-func readSegmentEntries(directory, segmentName string) ([]*entry.Entry, error) {
+// ReadSegmentEntries reads all entries from the given segment file
+func ReadSegmentEntries(directory, segmentName string) ([]*entry.Entry, error) {
 	var entries []*entry.Entry
 
 	file, err := os.Open(filepath.Join(directory, segmentName))
