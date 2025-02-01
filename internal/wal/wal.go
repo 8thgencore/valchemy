@@ -13,9 +13,8 @@ type WAL struct {
 	config          config.WALConfig
 	batch           []Entry
 	batchMu         sync.Mutex
-	timer           *time.Timer
+	quit            chan struct{}
 	currentSegment  *segment
-	maxSegmentBytes int64
 }
 
 // Recovery represents the recovery functionality for WAL
@@ -39,11 +38,10 @@ func New(cfg config.WALConfig) (*WAL, error) {
 	w := &WAL{
 		config:          cfg,
 		batch:           make([]Entry, 0, cfg.FlushingBatchSize),
-		maxSegmentBytes: parseSize(cfg.MaxSegmentSize),
 		currentSegment:  segment,
+		quit:            make(chan struct{}),
 	}
 
-	w.timer = time.NewTimer(cfg.FlushingBatchTimeout)
 	go w.flushOnTimeout()
 
 	return w, nil
@@ -74,7 +72,7 @@ func (w *WAL) flushBatch() error {
 			return err
 		}
 
-		if w.currentSegment.size >= w.maxSegmentBytes {
+		if w.currentSegment.size >= w.config.MaxSegmentSizeBytes {
 			if err := w.rotateSegment(); err != nil {
 				return err
 			}
@@ -103,19 +101,28 @@ func (w *WAL) rotateSegment() error {
 	return nil
 }
 
-// flushOnTimeout periodically writes a batch on timeout
+// flushOnTimeout periodically writes a batch on timeout using a ticker
 func (w *WAL) flushOnTimeout() {
-	for range w.timer.C {
-		w.batchMu.Lock()
-		_ = w.flushBatch()
-		w.batchMu.Unlock()
-		w.timer.Reset(w.config.FlushingBatchTimeout)
+	ticker := time.NewTicker(w.config.FlushingBatchTimeout)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			w.batchMu.Lock()
+			if err := w.flushBatch(); err != nil {
+				fmt.Printf("Error flushing batch: %v\n", err)
+			}
+			w.batchMu.Unlock()
+		case <-w.quit:
+			return
+		}
 	}
 }
 
 // Close closes the WAL
 func (w *WAL) Close() error {
-	w.timer.Stop()
+	close(w.quit)
 	w.batchMu.Lock()
 	defer w.batchMu.Unlock()
 

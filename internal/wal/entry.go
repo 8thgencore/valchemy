@@ -25,39 +25,44 @@ func (e *Entry) WriteTo(w io.Writer) (int64, error) {
 	var total int64
 
 	// Write the operation type
-	if n, err := w.Write([]byte{byte(e.Operation)}); err != nil {
+	n, err := w.Write([]byte{byte(e.Operation)})
+	if err != nil {
 		return total, err
-	} else {
-		total += int64(n)
 	}
+	total += int64(n)
 
-	// Write the length of the key and value
+	// Write the length of the key using a preallocated buffer
 	keyLen := uint32(len(e.Key))
-	if err := binary.Write(w, binary.LittleEndian, keyLen); err != nil {
+	buf := make([]byte, 4)
+	binary.LittleEndian.PutUint32(buf, keyLen)
+	n, err = w.Write(buf)
+	if err != nil {
 		return total, err
 	}
-	total += 4
+	total += int64(n)
 
 	// Write the key
-	if n, err := w.Write([]byte(e.Key)); err != nil {
+	n, err = w.Write([]byte(e.Key))
+	if err != nil {
 		return total, err
-	} else {
-		total += int64(n)
 	}
+	total += int64(n)
 
 	// For the SET operation, write the value
 	if e.Operation == OperationSet {
 		valueLen := uint32(len(e.Value))
-		if err := binary.Write(w, binary.LittleEndian, valueLen); err != nil {
+		binary.LittleEndian.PutUint32(buf, valueLen)
+		n, err = w.Write(buf)
+		if err != nil {
 			return total, err
 		}
-		total += 4
+		total += int64(n)
 
-		if n, err := w.Write([]byte(e.Value)); err != nil {
+		n, err = w.Write([]byte(e.Value))
+		if err != nil {
 			return total, err
-		} else {
-			total += int64(n)
 		}
+		total += int64(n)
 	}
 
 	return total, nil
@@ -69,43 +74,46 @@ func (e *Entry) ReadFrom(r io.Reader) (int64, error) {
 
 	// Read operation type
 	opByte := make([]byte, 1)
-	if n, err := r.Read(opByte); err != nil {
+	n, err := io.ReadFull(r, opByte)
+	if err != nil {
 		return total, err
-	} else {
-		total += int64(n)
 	}
+	total += int64(n)
 	e.Operation = OperationType(opByte[0])
 
-	// Read key length
-	var keyLen uint32
-	if err := binary.Read(r, binary.LittleEndian, &keyLen); err != nil {
+	// Read key length using a preallocated buffer
+	buf := make([]byte, 4)
+	n, err = io.ReadFull(r, buf)
+	if err != nil {
 		return total, err
 	}
-	total += 4
+	total += int64(n)
+	keyLen := binary.LittleEndian.Uint32(buf)
 
 	// Read key
 	keyBytes := make([]byte, keyLen)
-	if n, err := io.ReadFull(r, keyBytes); err != nil {
+	n, err = io.ReadFull(r, keyBytes)
+	if err != nil {
 		return total, err
-	} else {
-		total += int64(n)
 	}
+	total += int64(n)
 	e.Key = string(keyBytes)
 
 	// For SET operations, read value
 	if e.Operation == OperationSet {
-		var valueLen uint32
-		if err := binary.Read(r, binary.LittleEndian, &valueLen); err != nil {
+		n, err = io.ReadFull(r, buf)
+		if err != nil {
 			return total, err
 		}
-		total += 4
+		total += int64(n)
+		valueLen := binary.LittleEndian.Uint32(buf)
 
 		valueBytes := make([]byte, valueLen)
-		if n, err := io.ReadFull(r, valueBytes); err != nil {
+		n, err = io.ReadFull(r, valueBytes)
+		if err != nil {
 			return total, err
-		} else {
-			total += int64(n)
 		}
+		total += int64(n)
 		e.Value = string(valueBytes)
 	}
 

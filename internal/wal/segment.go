@@ -1,6 +1,7 @@
 package wal
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"os"
@@ -13,7 +14,8 @@ import (
 // segment represents a WAL segment file
 type segment struct {
 	file     *os.File
-	size     int64
+	writer   *bufio.Writer
+	size     uint64
 	filename string
 }
 
@@ -33,29 +35,38 @@ func newSegment(directory string) (*segment, error) {
 		return nil, fmt.Errorf("failed to create segment: %w", err)
 	}
 
+	writer := bufio.NewWriter(file)
+
 	return &segment{
 		file:     file,
+		writer:   writer,
 		filename: filename,
 	}, nil
 }
 
 // write writes data to the segment and updates its size
 func (s *segment) write(entry Entry) error {
-	n, err := entry.WriteTo(s.file)
+	n, err := entry.WriteTo(s.writer)
 	if err != nil {
 		return fmt.Errorf("failed to write entry: %w", err)
 	}
-	s.size += n
+	s.size += uint64(n)
+
 	return nil
 }
 
 // sync ensures all data is written to disk
 func (s *segment) sync() error {
+	if err := s.writer.Flush(); err != nil {
+		return fmt.Errorf("failed to flush buffer: %w", err)
+	}
+
 	return s.file.Sync()
 }
 
 // close closes the segment file
 func (s *segment) close() error {
+	_ = s.writer.Flush()
 	return s.file.Close()
 }
 
@@ -73,6 +84,7 @@ func listSegments(directory string) ([]string, error) {
 		}
 	}
 	sort.Strings(segments)
+
 	return segments, nil
 }
 
