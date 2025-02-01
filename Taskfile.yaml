@@ -1,6 +1,7 @@
 version: '3'
 
 includes:
+  build: ./taskfiles/build.yml
   deps: ./taskfiles/deps.yml
   dev: ./taskfiles/dev.yml
   test: ./taskfiles/test.yml
