@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/8thgencore/valchemy/internal/wal/entry"
 )
 
 // segment represents a WAL segment file
@@ -45,7 +47,7 @@ func newSegment(directory string) (*segment, error) {
 }
 
 // write writes data to the segment and updates its size
-func (s *segment) write(entry Entry) error {
+func (s *segment) write(entry entry.Entry) error {
 	n, err := entry.WriteTo(s.writer)
 	if err != nil {
 		return fmt.Errorf("failed to write entry: %w", err)
@@ -89,8 +91,8 @@ func listSegments(directory string) ([]string, error) {
 }
 
 // readSegmentEntries reads all entries from the given segment file
-func readSegmentEntries(directory, segmentName string) ([]*Entry, error) {
-	var entries []*Entry
+func readSegmentEntries(directory, segmentName string) ([]*entry.Entry, error) {
+	var entries []*entry.Entry
 
 	file, err := os.Open(filepath.Join(directory, segmentName))
 	if err != nil {
@@ -99,7 +101,7 @@ func readSegmentEntries(directory, segmentName string) ([]*Entry, error) {
 	defer file.Close()
 
 	for {
-		entry, err := readEntry(file)
+		entry, err := entry.ReadEntry(file)
 		if err == io.EOF {
 			break
 		}

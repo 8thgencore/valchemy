@@ -1,4 +1,4 @@
-package wal
+package entry
 
 import (
 	"encoding/binary"
@@ -120,8 +120,8 @@ func (e *Entry) ReadFrom(r io.Reader) (int64, error) {
 	return total, nil
 }
 
-// readEntry reads a single entry from the WAL file
-func readEntry(r io.Reader) (*Entry, error) {
+// ReadEntry reads a single entry from the WAL file
+func ReadEntry(r io.Reader) (*Entry, error) {
 	entry := &Entry{}
 	if _, err := entry.ReadFrom(r); err != nil {
 		return nil, err

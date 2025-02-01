@@ -6,26 +6,27 @@ import (
 	"time"
 
 	"github.com/8thgencore/valchemy/internal/config"
+	"github.com/8thgencore/valchemy/internal/wal/entry"
 )
 
-// WAL represents the Write-Ahead Log
-type WAL struct {
-	config          config.WALConfig
-	batch           []Entry
-	batchMu         sync.Mutex
-	quit            chan struct{}
-	currentSegment  *segment
+// Service represents the Write-Ahead Log
+type Service struct {
+	config         config.WALConfig
+	batch          []entry.Entry
+	batchMu        sync.Mutex
+	quit           chan struct{}
+	currentSegment *segment
 }
 
 // Recovery represents the recovery functionality for WAL
 type Recovery struct {
-	Operation OperationType
+	Operation entry.OperationType
 	Key       string
 	Value     string
 }
 
 // New creates a new WAL instance
-func New(cfg config.WALConfig) (*WAL, error) {
+func New(cfg config.WALConfig) (*Service, error) {
 	if !cfg.Enabled {
 		return nil, nil
 	}
@@ -35,11 +36,11 @@ func New(cfg config.WALConfig) (*WAL, error) {
 		return nil, err
 	}
 
-	w := &WAL{
-		config:          cfg,
-		batch:           make([]Entry, 0, cfg.FlushingBatchSize),
-		currentSegment:  segment,
-		quit:            make(chan struct{}),
+	w := &Service{
+		config:         cfg,
+		batch:          make([]entry.Entry, 0, cfg.FlushingBatchSize),
+		currentSegment: segment,
+		quit:           make(chan struct{}),
 	}
 
 	go w.flushOnTimeout()
@@ -48,7 +49,7 @@ func New(cfg config.WALConfig) (*WAL, error) {
 }
 
 // Write writes an operation to the WAL
-func (w *WAL) Write(entry Entry) error {
+func (w *Service) Write(entry entry.Entry) error {
 	w.batchMu.Lock()
 	defer w.batchMu.Unlock()
 
@@ -62,7 +63,7 @@ func (w *WAL) Write(entry Entry) error {
 }
 
 // flushBatch writes the current batch to disk
-func (w *WAL) flushBatch() error {
+func (w *Service) flushBatch() error {
 	if len(w.batch) == 0 {
 		return nil
 	}
@@ -84,11 +85,12 @@ func (w *WAL) flushBatch() error {
 	}
 
 	w.batch = w.batch[:0]
+
 	return nil
 }
 
 // rotateSegment creates a new segment and closes the current one
-func (w *WAL) rotateSegment() error {
+func (w *Service) rotateSegment() error {
 	if err := w.currentSegment.close(); err != nil {
 		return fmt.Errorf("failed to close current segment: %w", err)
 	}
@@ -98,11 +100,12 @@ func (w *WAL) rotateSegment() error {
 		return err
 	}
 	w.currentSegment = segment
+
 	return nil
 }
 
 // flushOnTimeout periodically writes a batch on timeout using a ticker
-func (w *WAL) flushOnTimeout() {
+func (w *Service) flushOnTimeout() {
 	ticker := time.NewTicker(w.config.FlushingBatchTimeout)
 	defer ticker.Stop()
 
@@ -121,7 +124,7 @@ func (w *WAL) flushOnTimeout() {
 }
 
 // Close closes the WAL
-func (w *WAL) Close() error {
+func (w *Service) Close() error {
 	close(w.quit)
 	w.batchMu.Lock()
 	defer w.batchMu.Unlock()
@@ -134,8 +137,8 @@ func (w *WAL) Close() error {
 }
 
 // Recover reads all WAL segments and returns entries for recovery
-func (w *WAL) Recover() ([]*Entry, error) {
-	var entries []*Entry
+func (w *Service) Recover() ([]*entry.Entry, error) {
+	var entries []*entry.Entry
 
 	segments, err := listSegments(w.config.DataDirectory)
 	if err != nil {

@@ -5,18 +5,18 @@ import (
 	"sync"
 
 	"github.com/8thgencore/valchemy/internal/wal"
+	"github.com/8thgencore/valchemy/internal/wal/entry"
 )
 
 // Engine is a struct that represents the storage engine
 type Engine struct {
-	log  *slog.Logger
 	data map[string]string
 	mu   sync.RWMutex
-	wal  *wal.WAL
+	wal  wal.WAL
 }
 
 // NewEngine creates a new Engine
-func NewEngine(log *slog.Logger, w *wal.WAL) *Engine {
+func NewEngine(log *slog.Logger, w wal.WAL) *Engine {
 	e := &Engine{
 		data: make(map[string]string),
 		wal:  w,
@@ -31,12 +31,12 @@ func NewEngine(log *slog.Logger, w *wal.WAL) *Engine {
 		}
 
 		// Apply recovered entries
-		for _, entry := range entries {
-			switch entry.Operation {
-			case wal.OperationSet:
-				e.data[entry.Key] = entry.Value
-			case wal.OperationDelete:
-				delete(e.data, entry.Key)
+		for _, el := range entries {
+			switch el.Operation {
+			case entry.OperationSet:
+				e.data[el.Key] = el.Value
+			case entry.OperationDelete:
+				delete(e.data, el.Key)
 			}
 		}
 	}
@@ -48,8 +48,8 @@ func NewEngine(log *slog.Logger, w *wal.WAL) *Engine {
 func (e *Engine) Set(key, value string) error {
 	// Write to WAL
 	if e.wal != nil {
-		if err := e.wal.Write(wal.Entry{
-			Operation: wal.OperationSet,
+		if err := e.wal.Write(entry.Entry{
+			Operation: entry.OperationSet,
 			Key:       key,
 			Value:     value,
 		}); err != nil {
@@ -61,6 +61,7 @@ func (e *Engine) Set(key, value string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.data[key] = value
+
 	return nil
 }
 
@@ -77,8 +78,8 @@ func (e *Engine) Get(key string) (string, bool) {
 func (e *Engine) Delete(key string) error {
 	// Write to WAL
 	if e.wal != nil {
-		if err := e.wal.Write(wal.Entry{
-			Operation: wal.OperationDelete,
+		if err := e.wal.Write(entry.Entry{
+			Operation: entry.OperationDelete,
 			Key:       key,
 		}); err != nil {
 			return err
@@ -89,5 +90,6 @@ func (e *Engine) Delete(key string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	delete(e.data, key)
+
 	return nil
 }
