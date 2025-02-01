@@ -37,7 +37,7 @@ func New(configPath string) (*App, error) {
 	}
 
 	// Initialize storage engine
-	engine := storage.NewEngine(wal)
+	engine := storage.NewEngine(log, wal)
 
 	// Initialize command handler
 	handler := compute.NewHandler(log, engine)

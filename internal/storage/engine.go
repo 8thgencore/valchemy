@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"log/slog"
 	"sync"
 
 	"github.com/8thgencore/valchemy/internal/wal"
@@ -8,17 +9,39 @@ import (
 
 // Engine is a struct that represents the storage engine
 type Engine struct {
+	log  *slog.Logger
 	data map[string]string
 	mu   sync.RWMutex
 	wal  *wal.WAL
 }
 
 // NewEngine creates a new Engine
-func NewEngine(wal *wal.WAL) *Engine {
-	return &Engine{
+func NewEngine(log *slog.Logger, w *wal.WAL) *Engine {
+	e := &Engine{
 		data: make(map[string]string),
-		wal:  wal,
+		wal:  w,
 	}
+
+	// Recover data from WAL if available
+	if w != nil {
+		entries, err := w.Recover()
+		if err != nil {
+			// Log error but continue - we can still operate with empty state
+			log.Error("Failed to recover from WAL", "error", err)
+		}
+
+		// Apply recovered entries
+		for _, entry := range entries {
+			switch entry.Operation {
+			case wal.OperationSet:
+				e.data[entry.Key] = entry.Value
+			case wal.OperationDelete:
+				delete(e.data, entry.Key)
+			}
+		}
+	}
+
+	return e
 }
 
 // Set sets a key-value pair in the engine
