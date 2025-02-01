@@ -23,6 +23,7 @@ type Config struct {
 	Engine  EngineConfig
 	Network NetworkConfig
 	Logging LoggingConfig
+	WAL     WALConfig
 }
 
 // EngineConfig is the configuration for the engine
@@ -42,6 +43,15 @@ type NetworkConfig struct {
 type LoggingConfig struct {
 	Level  string `yaml:"level" env-default:"info"`
 	Output string `yaml:"output" env-default:"stdout"`
+}
+
+// WALConfig configures the Write-Ahead Logging (WAL)
+type WALConfig struct {
+	Enabled              bool          `yaml:"enabled" env-default:"false"`
+	FlushingBatchSize    int           `yaml:"flushing_batch_size" env-default:"100"`
+	FlushingBatchTimeout time.Duration `yaml:"flushing_batch_timeout" env-default:"10ms"`
+	MaxSegmentSize       string        `yaml:"max_segment_size" env-default:"10MB"`
+	DataDirectory        string        `yaml:"data_directory" env-default:"./data/wal"`
 }
 
 // NewConfig creates a new instance of Config.

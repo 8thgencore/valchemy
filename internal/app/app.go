@@ -8,6 +8,7 @@ import (
 	"github.com/8thgencore/valchemy/internal/config"
 	"github.com/8thgencore/valchemy/internal/server"
 	"github.com/8thgencore/valchemy/internal/storage"
+	"github.com/8thgencore/valchemy/internal/wal"
 	"github.com/8thgencore/valchemy/pkg/logger"
 )
 
@@ -29,8 +30,14 @@ func New(configPath string) (*App, error) {
 	// Initialize logger
 	log := logger.New(cfg.Env)
 
+	// Initialize WAL
+	wal, err := wal.New(cfg.WAL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create WAL: %w", err)
+	}
+
 	// Initialize storage engine
-	engine := storage.NewEngine()
+	engine := storage.NewEngine(wal)
 
 	// Initialize command handler
 	handler := compute.NewHandler(log, engine)

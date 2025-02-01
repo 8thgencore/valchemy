@@ -5,13 +5,21 @@ import (
 	"os"
 	"testing"
 
+	"github.com/8thgencore/valchemy/internal/config"
 	"github.com/8thgencore/valchemy/internal/storage"
 	"github.com/8thgencore/valchemy/pkg/logger/sl"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestHandler(t *testing.T) {
-	engine := storage.NewEngine()
+	cfg, err := config.NewConfig("test.yaml")
+	if err != nil {
+		t.Fatalf("failed to create config: %v", err)
+	}
+	engine, err := storage.NewEngine(cfg)
+	if err != nil {
+		t.Fatalf("failed to create storage engine: %v", err)
+	}
 	testLogger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelDebug,
 	}))
