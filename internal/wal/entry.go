@@ -62,3 +62,62 @@ func (e *Entry) WriteTo(w io.Writer) (int64, error) {
 
 	return total, nil
 }
+
+// ReadFrom reads an entry from an io.Reader
+func (e *Entry) ReadFrom(r io.Reader) (int64, error) {
+	var total int64
+
+	// Read operation type
+	opByte := make([]byte, 1)
+	if n, err := r.Read(opByte); err != nil {
+		return total, err
+	} else {
+		total += int64(n)
+	}
+	e.Operation = OperationType(opByte[0])
+
+	// Read key length
+	var keyLen uint32
+	if err := binary.Read(r, binary.LittleEndian, &keyLen); err != nil {
+		return total, err
+	}
+	total += 4
+
+	// Read key
+	keyBytes := make([]byte, keyLen)
+	if n, err := io.ReadFull(r, keyBytes); err != nil {
+		return total, err
+	} else {
+		total += int64(n)
+	}
+	e.Key = string(keyBytes)
+
+	// For SET operations, read value
+	if e.Operation == OperationSet {
+		var valueLen uint32
+		if err := binary.Read(r, binary.LittleEndian, &valueLen); err != nil {
+			return total, err
+		}
+		total += 4
+
+		valueBytes := make([]byte, valueLen)
+		if n, err := io.ReadFull(r, valueBytes); err != nil {
+			return total, err
+		} else {
+			total += int64(n)
+		}
+		e.Value = string(valueBytes)
+	}
+
+	return total, nil
+}
+
+// readEntry reads a single entry from the WAL file
+func readEntry(r io.Reader) (*Entry, error) {
+	entry := &Entry{}
+	if _, err := entry.ReadFrom(r); err != nil {
+		return nil, err
+	}
+
+	return entry, nil
+}

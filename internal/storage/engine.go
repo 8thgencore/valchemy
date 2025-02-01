@@ -46,7 +46,7 @@ func NewEngine(log *slog.Logger, w *wal.WAL) *Engine {
 
 // Set sets a key-value pair in the engine
 func (e *Engine) Set(key, value string) error {
-	// Сначала записываем в WAL
+	// Write to WAL
 	if e.wal != nil {
 		if err := e.wal.Write(wal.Entry{
 			Operation: wal.OperationSet,
@@ -57,7 +57,7 @@ func (e *Engine) Set(key, value string) error {
 		}
 	}
 
-	// Затем обновляем данные в памяти
+	// Update data in memory
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.data[key] = value
@@ -75,7 +75,7 @@ func (e *Engine) Get(key string) (string, bool) {
 
 // Delete deletes a key from the engine
 func (e *Engine) Delete(key string) error {
-	// Сначала записываем в WAL
+	// Write to WAL
 	if e.wal != nil {
 		if err := e.wal.Write(wal.Entry{
 			Operation: wal.OperationDelete,
@@ -85,7 +85,7 @@ func (e *Engine) Delete(key string) error {
 		}
 	}
 
-	// Затем удаляем из памяти
+	// Delete from memory
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	delete(e.data, key)

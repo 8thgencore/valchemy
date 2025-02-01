@@ -2,6 +2,7 @@ package wal
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -18,6 +19,10 @@ type segment struct {
 
 // newSegment creates a new WAL segment
 func newSegment(directory string) (*segment, error) {
+	if err := os.MkdirAll(directory, 0o755); err != nil {
+		return nil, fmt.Errorf("failed to create WAL directory: %w", err)
+	}
+
 	filename := filepath.Join(
 		directory,
 		fmt.Sprintf("wal-%d.log", time.Now().UnixNano()),
@@ -69,4 +74,28 @@ func listSegments(directory string) ([]string, error) {
 	}
 	sort.Strings(segments)
 	return segments, nil
+}
+
+// readSegmentEntries reads all entries from the given segment file
+func readSegmentEntries(directory, segmentName string) ([]*Entry, error) {
+	var entries []*Entry
+
+	file, err := os.Open(filepath.Join(directory, segmentName))
+	if err != nil {
+		return nil, fmt.Errorf("failed to open segment %s: %w", segmentName, err)
+	}
+	defer file.Close()
+
+	for {
+		entry, err := readEntry(file)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to read entry from segment %s: %w", segmentName, err)
+		}
+		entries = append(entries, entry)
+	}
+
+	return entries, nil
 }
