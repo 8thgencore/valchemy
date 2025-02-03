@@ -32,7 +32,9 @@ func (h *Handler) Handle(input string) (string, error) {
 		return HelpMessage, nil
 
 	case CommandSet:
-		h.engine.Set(cmd.Args[0], cmd.Args[1])
+		if err := h.engine.Set(cmd.Args[0], cmd.Args[1]); err != nil {
+			return "", err
+		}
 		return ResponseOK, nil
 
 	case CommandGet:
@@ -43,7 +45,9 @@ func (h *Handler) Handle(input string) (string, error) {
 		return value, nil
 
 	case CommandDel:
-		h.engine.Delete(cmd.Args[0])
+		if err := h.engine.Delete(cmd.Args[0]); err != nil {
+			return "", err
+		}
 		return ResponseOK, nil
 	}
 

@@ -87,3 +87,4 @@ issues:
   exclude-files:
     - \.pb\.go$
     - \.pb\.gw\.go$
+    - _test\.go$
