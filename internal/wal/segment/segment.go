@@ -2,6 +2,7 @@ package segment
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -24,7 +25,7 @@ type Segment struct {
 
 // NewSegment creates a new WAL segment
 func NewSegment(directory string) (*Segment, error) {
-	if err := os.MkdirAll(directory, 0o755); err != nil {
+	if err := os.MkdirAll(directory, 0o750); err != nil {
 		return nil, fmt.Errorf("failed to create WAL directory: %w", err)
 	}
 
@@ -42,7 +43,7 @@ func NewSegment(directory string) (*Segment, error) {
 // CreateSegmentFile creates a new segment file if it doesn't exist
 func (s *Segment) CreateSegmentFile() error {
 	if s.file == nil {
-		file, err := os.OpenFile(s.filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+		file, err := os.OpenFile(s.filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 		if err != nil {
 			return fmt.Errorf("failed to create segment file: %w", err)
 		}
@@ -63,7 +64,15 @@ func (s *Segment) Write(entry entry.Entry) error {
 	if err != nil {
 		return fmt.Errorf("failed to write entry: %w", err)
 	}
-	s.size += uint64(n)
+
+	if n < 0 {
+		return fmt.Errorf("negative write size: %d", n)
+	}
+	newSize := s.size + uint64(n)
+	if newSize < s.size {
+		return errors.New("size overflow detected")
+	}
+	s.size = newSize
 
 	return nil
 }
@@ -87,7 +96,10 @@ func (s *Segment) Close() error {
 		return nil
 	}
 
-	_ = s.writer.Flush()
+	if err := s.writer.Flush(); err != nil {
+		return fmt.Errorf("failed to flush buffer on close: %w", err)
+	}
+
 	return s.file.Close()
 }
 
@@ -105,8 +117,11 @@ func ListSegments(directory string) ([]string, error) {
 
 	var segments []string
 	for _, f := range files {
-		if strings.HasPrefix(f.Name(), "wal-") && strings.HasSuffix(f.Name(), ".log") {
-			segments = append(segments, f.Name())
+		name := f.Name()
+		if !strings.Contains(name, "..") &&
+			strings.HasPrefix(name, "wal-") &&
+			strings.HasSuffix(name, ".log") {
+			segments = append(segments, name)
 		}
 	}
 	sort.Strings(segments)
@@ -116,14 +131,22 @@ func ListSegments(directory string) ([]string, error) {
 
 // ReadSegmentEntries reads all entries from the given segment file
 func ReadSegmentEntries(directory, segmentName string) ([]*entry.Entry, error) {
-	var entries []*entry.Entry
+	// Validate and sanitize the input paths
+	segmentPath := filepath.Join(directory, segmentName)
+	segmentPath = filepath.Clean(segmentPath)
 
-	file, err := os.Open(filepath.Join(directory, segmentName))
+	file, err := os.Open(segmentPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open segment %s: %w", segmentName, err)
 	}
-	defer file.Close()
 
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			err = fmt.Errorf("failed to close segment file: %w", closeErr)
+		}
+	}()
+
+	var entries []*entry.Entry
 	for {
 		entry, err := entry.ReadEntry(file)
 		if err == io.EOF {

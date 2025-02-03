@@ -2,14 +2,18 @@ package entry
 
 import (
 	"encoding/binary"
+	"errors"
 	"io"
+	"math"
 )
 
 // OperationType defines the type of operation
 type OperationType byte
 
 const (
-	OperationSet    OperationType = 1
+	// OperationSet is the set operation
+	OperationSet OperationType = 1
+	// OperationDelete is the delete operation
 	OperationDelete OperationType = 2
 )
 
@@ -32,9 +36,12 @@ func (e *Entry) WriteTo(w io.Writer) (int64, error) {
 	total += int64(n)
 
 	// Write the length of the key using a preallocated buffer
-	keyLen := uint32(len(e.Key))
+	keyLen := len(e.Key)
+	if keyLen > math.MaxUint32 {
+		return total, errors.New("key length exceeds maximum allowed value")
+	}
 	buf := make([]byte, 4)
-	binary.LittleEndian.PutUint32(buf, keyLen)
+	binary.LittleEndian.PutUint32(buf, uint32(keyLen))
 	n, err = w.Write(buf)
 	if err != nil {
 		return total, err
@@ -50,8 +57,11 @@ func (e *Entry) WriteTo(w io.Writer) (int64, error) {
 
 	// For the SET operation, write the value
 	if e.Operation == OperationSet {
-		valueLen := uint32(len(e.Value))
-		binary.LittleEndian.PutUint32(buf, valueLen)
+		valueLen := len(e.Value)
+		if valueLen > math.MaxUint32 {
+			return total, errors.New("value length exceeds maximum allowed value")
+		}
+		binary.LittleEndian.PutUint32(buf, uint32(valueLen))
 		n, err = w.Write(buf)
 		if err != nil {
 			return total, err
