@@ -44,20 +44,45 @@ func New(cfg config.WALConfig) (*Service, error) {
 		quit:           make(chan struct{}),
 	}
 
-	go w.flushOnTimeout()
-
 	return w, nil
 }
 
-// Write writes an operation to the WAL
+// Write writes an operation to the WAL and ensures it's persisted before returning
 func (w *Service) Write(entry entry.Entry) error {
-	w.batchMu.Lock()
-	defer w.batchMu.Unlock()
+	done := make(chan error, 1)
 
+	w.batchMu.Lock()
 	w.batch = append(w.batch, entry)
 
+	// If the batch is full, flush it immediately
 	if len(w.batch) >= w.config.FlushingBatchSize {
-		return w.flushBatch()
+		err := w.flushBatch()
+		w.batchMu.Unlock()
+		return err
+	}
+
+	// Start a goroutine to check for the write
+	go func() {
+		timer := time.NewTimer(w.config.FlushingBatchTimeout)
+		defer timer.Stop()
+
+		select {
+		case <-timer.C:
+			w.batchMu.Lock()
+			err := w.flushBatch()
+			w.batchMu.Unlock()
+			done <- err
+		case <-w.quit:
+			done <- nil
+		}
+	}()
+
+	// Unlock the mutex before waiting
+	w.batchMu.Unlock()
+
+	// Wait for the write to complete or the WAL to be closed
+	if err := <-done; err != nil {
+		return fmt.Errorf("failed to flush WAL: %w", err)
 	}
 
 	return nil
@@ -103,25 +128,6 @@ func (w *Service) rotateSegment() error {
 	w.currentSegment = segment
 
 	return nil
-}
-
-// flushOnTimeout periodically writes a batch on timeout using a ticker
-func (w *Service) flushOnTimeout() {
-	ticker := time.NewTicker(w.config.FlushingBatchTimeout)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			w.batchMu.Lock()
-			if err := w.flushBatch(); err != nil {
-				fmt.Printf("Error flushing batch: %v\n", err)
-			}
-			w.batchMu.Unlock()
-		case <-w.quit:
-			return
-		}
-	}
 }
 
 // Close closes the WAL

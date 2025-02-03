@@ -15,10 +15,11 @@ import (
 
 // Segment represents a WAL Segment file
 type Segment struct {
-	file     *os.File
-	writer   *bufio.Writer
-	size     uint64
-	filename string
+	file      *os.File
+	writer    *bufio.Writer
+	size      uint64
+	filename  string
+	directory string
 }
 
 // NewSegment creates a new WAL segment
@@ -32,22 +33,32 @@ func NewSegment(directory string) (*Segment, error) {
 		fmt.Sprintf("wal-%d.log", time.Now().UnixNano()),
 	)
 
-	file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create segment: %w", err)
+	return &Segment{
+		filename:  filename,
+		directory: directory,
+	}, nil
+}
+
+// CreateSegmentFile creates a new segment file if it doesn't exist
+func (s *Segment) CreateSegmentFile() error {
+	if s.file == nil {
+		file, err := os.OpenFile(s.filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+		if err != nil {
+			return fmt.Errorf("failed to create segment file: %w", err)
+		}
+		s.file = file
+		s.writer = bufio.NewWriter(file)
 	}
 
-	writer := bufio.NewWriter(file)
-
-	return &Segment{
-		file:     file,
-		writer:   writer,
-		filename: filename,
-	}, nil
+	return nil
 }
 
 // Write writes data to the segment and updates its size
 func (s *Segment) Write(entry entry.Entry) error {
+	if err := s.CreateSegmentFile(); err != nil {
+		return fmt.Errorf("failed to create segment file: %w", err)
+	}
+
 	n, err := entry.WriteTo(s.writer)
 	if err != nil {
 		return fmt.Errorf("failed to write entry: %w", err)
@@ -59,6 +70,10 @@ func (s *Segment) Write(entry entry.Entry) error {
 
 // Sync ensures all data is written to disk
 func (s *Segment) Sync() error {
+	if s.file == nil {
+		return nil
+	}
+
 	if err := s.writer.Flush(); err != nil {
 		return fmt.Errorf("failed to flush buffer: %w", err)
 	}
@@ -68,6 +83,10 @@ func (s *Segment) Sync() error {
 
 // Close closes the segment file
 func (s *Segment) Close() error {
+	if s.file == nil {
+		return nil
+	}
+
 	_ = s.writer.Flush()
 	return s.file.Close()
 }
