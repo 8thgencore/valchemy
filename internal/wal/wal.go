@@ -17,13 +17,10 @@ type Service struct {
 	batchMu        sync.Mutex
 	quit           chan struct{}
 	currentSegment *segment.Segment
-}
 
-// Recovery represents the recovery functionality for WAL
-type Recovery struct {
-	Operation entry.OperationType
-	Key       string
-	Value     string
+	flushTimer  *time.Timer
+	flushDone   []chan error
+	timerActive bool
 }
 
 // New creates a new WAL instance
@@ -42,45 +39,54 @@ func New(cfg config.WALConfig) (*Service, error) {
 		batch:          make([]entry.Entry, 0, cfg.FlushingBatchSize),
 		currentSegment: segment,
 		quit:           make(chan struct{}),
+		flushDone:      make([]chan error, 0),
 	}
 
 	return w, nil
 }
 
-// Write writes an operation to the WAL and ensures it's persisted before returning
 func (w *Service) Write(entry entry.Entry) error {
-	done := make(chan error, 1)
-
 	w.batchMu.Lock()
 	w.batch = append(w.batch, entry)
+
+	// Create a channel for the current request
+	done := make(chan error, 1)
+	w.flushDone = append(w.flushDone, done)
 
 	// If the batch is full, flush it immediately
 	if len(w.batch) >= w.config.FlushingBatchSize {
 		err := w.flushBatch()
+		w.notifyWaiters(err)
 		w.batchMu.Unlock()
 		return err
 	}
 
-	// Start a goroutine to check for the write
-	go func() {
-		timer := time.NewTimer(w.config.FlushingBatchTimeout)
-		defer timer.Stop()
-
-		select {
-		case <-timer.C:
-			w.batchMu.Lock()
-			err := w.flushBatch()
-			w.batchMu.Unlock()
-			done <- err
-		case <-w.quit:
-			done <- nil
+	// Start the timer only if it's not already active
+	if !w.timerActive {
+		if w.flushTimer != nil {
+			w.flushTimer.Stop()
 		}
-	}()
+		w.flushTimer = time.NewTimer(w.config.FlushingBatchTimeout)
+		w.timerActive = true
 
-	// Unlock the mutex before waiting
+		// Start a goroutine to handle the timer
+		go func() {
+			select {
+			case <-w.flushTimer.C:
+				w.batchMu.Lock()
+				err := w.flushBatch()
+				w.notifyWaiters(err)
+				w.timerActive = false
+				w.batchMu.Unlock()
+			case <-w.quit:
+				w.notifyWaiters(nil)
+			}
+		}()
+	}
+
 	w.batchMu.Unlock()
 
-	// Wait for the write to complete or the WAL to be closed
+	// Wait for the flush to complete
 	if err := <-done; err != nil {
 		return fmt.Errorf("failed to flush WAL: %w", err)
 	}
@@ -88,11 +94,26 @@ func (w *Service) Write(entry entry.Entry) error {
 	return nil
 }
 
+// notifyWaiters notifies all waiting goroutines
+func (w *Service) notifyWaiters(err error) {
+	for _, ch := range w.flushDone {
+		ch <- err
+	}
+	// Clear the list of waiting channels
+	w.flushDone = make([]chan error, 0)
+}
+
 // flushBatch writes the current batch to disk
 func (w *Service) flushBatch() error {
 	if len(w.batch) == 0 {
 		return nil
 	}
+
+	// Stop and reset the timer when flushing
+	if w.flushTimer != nil {
+		w.flushTimer.Stop()
+	}
+	w.timerActive = false
 
 	for _, entry := range w.batch {
 		if err := w.currentSegment.Write(entry); err != nil {
