@@ -10,20 +10,30 @@ import (
 	"github.com/8thgencore/valchemy/internal/wal/segment"
 )
 
-// Service represents the Write-Ahead Log
+// Service represents the Write-Ahead Log that provides durability guarantees
+// by writing entries to disk before acknowledging the write operation.
 type Service struct {
-	config         config.WALConfig
-	batch          []entry.Entry
-	batchMu        sync.Mutex
-	quit           chan struct{}
+	// Configuration
+	config config.WALConfig
+
+	// Segment management
 	currentSegment *segment.Segment
 
+	// Batch processing
+	batch   []entry.Entry
+	batchMu sync.Mutex
+
+	// Flush coordination
 	flushTimer  *time.Timer
-	flushDone   []chan error
+	flushDone   []chan error // Channels for notifying waiting goroutines
 	timerActive bool
+
+	// Service lifecycle
+	quit chan struct{}
 }
 
-// New creates a new WAL instance
+// New creates a new WAL instance with the provided configuration.
+// Returns nil if WAL is disabled in the configuration.
 func New(cfg config.WALConfig) (*Service, error) {
 	if !cfg.Enabled {
 		return nil, nil
@@ -31,7 +41,7 @@ func New(cfg config.WALConfig) (*Service, error) {
 
 	segment, err := segment.NewSegment(cfg.DataDirectory)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create new segment: %w", err)
 	}
 
 	w := &Service{
@@ -45,15 +55,17 @@ func New(cfg config.WALConfig) (*Service, error) {
 	return w, nil
 }
 
+// Write adds an entry to the WAL batch and ensures it's written to disk
+// either immediately if the batch is full or after the flush timeout.
 func (w *Service) Write(entry entry.Entry) error {
 	w.batchMu.Lock()
-	w.batch = append(w.batch, entry)
 
-	// Create a channel for the current request
+	// Add entry to batch and create notification channel
+	w.batch = append(w.batch, entry)
 	done := make(chan error, 1)
 	w.flushDone = append(w.flushDone, done)
 
-	// If the batch is full, flush it immediately
+	// Handle immediate flush if batch is full
 	if len(w.batch) >= w.config.FlushingBatchSize {
 		err := w.flushBatch()
 		w.notifyWaiters(err)
@@ -61,32 +73,11 @@ func (w *Service) Write(entry entry.Entry) error {
 		return err
 	}
 
-	// Start the timer only if it's not already active
-	if !w.timerActive {
-		if w.flushTimer != nil {
-			w.flushTimer.Stop()
-		}
-		w.flushTimer = time.NewTimer(w.config.FlushingBatchTimeout)
-		w.timerActive = true
-
-		// Start a goroutine to handle the timer
-		go func() {
-			select {
-			case <-w.flushTimer.C:
-				w.batchMu.Lock()
-				err := w.flushBatch()
-				w.notifyWaiters(err)
-				w.timerActive = false
-				w.batchMu.Unlock()
-			case <-w.quit:
-				w.notifyWaiters(nil)
-			}
-		}()
-	}
-
+	// Start flush timer if needed
+	w.startFlushTimerIfNeeded()
 	w.batchMu.Unlock()
 
-	// Wait for the flush to complete
+	// Wait for flush completion
 	if err := <-done; err != nil {
 		return fmt.Errorf("failed to flush WAL: %w", err)
 	}
@@ -94,7 +85,36 @@ func (w *Service) Write(entry entry.Entry) error {
 	return nil
 }
 
-// notifyWaiters notifies all waiting goroutines
+// startFlushTimerIfNeeded starts a new flush timer if one isn't already active.
+// Caller must hold batchMu lock.
+func (w *Service) startFlushTimerIfNeeded() {
+	if !w.timerActive {
+		if w.flushTimer != nil {
+			w.flushTimer.Stop()
+		}
+		w.flushTimer = time.NewTimer(w.config.FlushingBatchTimeout)
+		w.timerActive = true
+
+		go w.handleFlushTimer()
+	}
+}
+
+// handleFlushTimer handles the flush timer expiration or service shutdown.
+func (w *Service) handleFlushTimer() {
+	select {
+	case <-w.flushTimer.C:
+		w.batchMu.Lock()
+		err := w.flushBatch()
+		w.notifyWaiters(err)
+		w.timerActive = false
+		w.batchMu.Unlock()
+	case <-w.quit:
+		w.notifyWaiters(nil)
+	}
+}
+
+// notifyWaiters notifies all waiting goroutines about flush completion
+// and clears the waiters list.
 func (w *Service) notifyWaiters(err error) {
 	for _, ch := range w.flushDone {
 		ch <- err
@@ -103,7 +123,8 @@ func (w *Service) notifyWaiters(err error) {
 	w.flushDone = make([]chan error, 0)
 }
 
-// flushBatch writes the current batch to disk
+// flushBatch writes the current batch to disk and manages segment rotation.
+// Caller must hold batchMu lock.
 func (w *Service) flushBatch() error {
 	if len(w.batch) == 0 {
 		return nil
@@ -115,18 +136,20 @@ func (w *Service) flushBatch() error {
 	}
 	w.timerActive = false
 
+	// Write entries and handle segment rotation
 	for _, entry := range w.batch {
 		if err := w.currentSegment.Write(entry); err != nil {
-			return err
+			return fmt.Errorf("failed to write entry: %w", err)
 		}
 
 		if w.currentSegment.Size() >= w.config.MaxSegmentSizeBytes {
 			if err := w.rotateSegment(); err != nil {
-				return err
+				return fmt.Errorf("failed to rotate segment: %w", err)
 			}
 		}
 	}
 
+	// Ensure durability by syncing to disk
 	if err := w.currentSegment.Sync(); err != nil {
 		return fmt.Errorf("failed to sync WAL: %w", err)
 	}
