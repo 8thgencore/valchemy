@@ -1,6 +1,7 @@
 package wal
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -176,7 +177,11 @@ func (w *Service) rotateSegment() error {
 
 // Close closes the WAL
 func (w *Service) Close() error {
+	if w.quit == nil {
+		return errors.New("WAL already closed")
+	}
 	close(w.quit)
+	w.quit = nil // Prevent double close
 	w.batchMu.Lock()
 	defer w.batchMu.Unlock()
 

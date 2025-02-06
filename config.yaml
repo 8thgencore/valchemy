@@ -11,6 +11,6 @@ logging:
 wal:
   enabled: true
   flushing_batch_size: 100
-  flushing_batch_timeout: "6s"
+  flushing_batch_timeout: "10ms"
   max_segment_size: "10MB"
   data_directory: "./data/wal"
