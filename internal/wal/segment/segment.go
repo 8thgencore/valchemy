@@ -15,7 +15,7 @@ import (
 )
 
 // Segment represents a WAL Segment file
-type Segment struct {
+type segment struct {
 	file      *os.File
 	writer    *bufio.Writer
 	size      uint64
@@ -24,7 +24,7 @@ type Segment struct {
 }
 
 // NewSegment creates a new WAL segment
-func NewSegment(directory string) (*Segment, error) {
+func NewSegment(directory string) (*segment, error) {
 	if err := os.MkdirAll(directory, 0o750); err != nil {
 		return nil, fmt.Errorf("failed to create WAL directory: %w", err)
 	}
@@ -34,28 +34,14 @@ func NewSegment(directory string) (*Segment, error) {
 		fmt.Sprintf("wal-%d.log", time.Now().UnixNano()),
 	)
 
-	return &Segment{
+	return &segment{
 		filename:  filename,
 		directory: directory,
 	}, nil
 }
 
-// CreateSegmentFile creates a new segment file if it doesn't exist
-func (s *Segment) CreateSegmentFile() error {
-	if s.file == nil {
-		file, err := os.OpenFile(s.filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
-		if err != nil {
-			return fmt.Errorf("failed to create segment file: %w", err)
-		}
-		s.file = file
-		s.writer = bufio.NewWriter(file)
-	}
-
-	return nil
-}
-
 // Write writes data to the segment and updates its size
-func (s *Segment) Write(entry entry.Entry) error {
+func (s *segment) Write(entry entry.Entry) error {
 	if err := s.CreateSegmentFile(); err != nil {
 		return fmt.Errorf("failed to create segment file: %w", err)
 	}
@@ -78,7 +64,7 @@ func (s *Segment) Write(entry entry.Entry) error {
 }
 
 // Sync ensures all data is written to disk
-func (s *Segment) Sync() error {
+func (s *segment) Sync() error {
 	if s.file == nil {
 		return nil
 	}
@@ -91,7 +77,7 @@ func (s *Segment) Sync() error {
 }
 
 // Close closes the segment file
-func (s *Segment) Close() error {
+func (s *segment) Close() error {
 	if s.file == nil {
 		return nil
 	}
@@ -104,8 +90,22 @@ func (s *Segment) Close() error {
 }
 
 // Size returns the size of the segment
-func (s *Segment) Size() uint64 {
+func (s *segment) Size() uint64 {
 	return s.size
+}
+
+// CreateSegmentFile creates a new segment file if it doesn't exist
+func (s *segment) CreateSegmentFile() error {
+	if s.file == nil {
+		file, err := os.OpenFile(s.filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+		if err != nil {
+			return fmt.Errorf("failed to create segment file: %w", err)
+		}
+		s.file = file
+		s.writer = bufio.NewWriter(file)
+	}
+
+	return nil
 }
 
 // ListSegments returns a sorted list of WAL segment files

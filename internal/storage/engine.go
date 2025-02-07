@@ -31,36 +31,62 @@ func NewEngine(log *slog.Logger, w wal.WAL) *Engine {
 		}
 
 		// Apply recovered entries
-		for _, el := range entries {
-			switch el.Operation {
-			case entry.OperationSet:
-				e.data[el.Key] = el.Value
-			case entry.OperationDelete:
-				delete(e.data, el.Key)
-			}
-		}
+		e.applyEntries(entries)
 	}
 
 	return e
 }
 
+// applyEntries applies a slice of WAL entries to the in-memory state
+func (e *Engine) applyEntries(entries []*entry.Entry) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	for _, el := range entries {
+		switch el.Operation {
+		case entry.OperationSet:
+			e.data[el.Key] = el.Value
+		case entry.OperationDelete:
+			delete(e.data, el.Key)
+		case entry.OperationClear:
+			e.data = make(map[string]string)
+		}
+	}
+}
+
+// applyEntry applies a single WAL entry to the in-memory state
+func (e *Engine) applyEntry(el entry.Entry) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	switch el.Operation {
+	case entry.OperationSet:
+		e.data[el.Key] = el.Value
+	case entry.OperationDelete:
+		delete(e.data, el.Key)
+	case entry.OperationClear:
+		e.data = make(map[string]string)
+	}
+}
+
 // Set sets a key-value pair in the engine
 func (e *Engine) Set(key, value string) error {
-	// Write to WAL
+	// Prepare the entry
+	entry := entry.Entry{
+		Operation: entry.OperationSet,
+		Key:       key,
+		Value:     value,
+	}
+
+	// Apply the change to in-memory state
+	e.applyEntry(entry)
+
+	// Write to WAL first without holding the mutex
 	if e.wal != nil {
-		if err := e.wal.Write(entry.Entry{
-			Operation: entry.OperationSet,
-			Key:       key,
-			Value:     value,
-		}); err != nil {
+		if err := e.wal.Write(entry); err != nil {
 			return err
 		}
 	}
-
-	// Update data in memory
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	e.data[key] = value
 
 	return nil
 }
@@ -76,20 +102,41 @@ func (e *Engine) Get(key string) (string, bool) {
 
 // Delete deletes a key from the engine
 func (e *Engine) Delete(key string) error {
-	// Write to WAL
+	// Prepare the entry
+	entry := entry.Entry{
+		Operation: entry.OperationDelete,
+		Key:       key,
+	}
+
+	// Write to WAL first without holding the mutex
 	if e.wal != nil {
-		if err := e.wal.Write(entry.Entry{
-			Operation: entry.OperationDelete,
-			Key:       key,
-		}); err != nil {
+		if err := e.wal.Write(entry); err != nil {
 			return err
 		}
 	}
 
-	// Delete from memory
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	delete(e.data, key)
+	// Apply the change to in-memory state
+	e.applyEntry(entry)
+
+	return nil
+}
+
+// Clear removes all keys from the engine
+func (e *Engine) Clear() error {
+	// Prepare the entry
+	entry := entry.Entry{
+		Operation: entry.OperationClear,
+	}
+
+	// Write to WAL first without holding the mutex
+	if e.wal != nil {
+		if err := e.wal.Write(entry); err != nil {
+			return err
+		}
+	}
+
+	// Apply the change to in-memory state
+	e.applyEntry(entry)
 
 	return nil
 }
