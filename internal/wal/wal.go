@@ -1,7 +1,6 @@
 package wal
 
 import (
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -18,7 +17,7 @@ type Service struct {
 	config config.WALConfig
 
 	// Segment management
-	currentSegment *segment.Segment
+	currentSegment segment.Segment
 
 	// Batch processing
 	batch   []entry.Entry
@@ -42,7 +41,7 @@ func New(cfg config.WALConfig) (*Service, error) {
 
 	segment, err := segment.NewSegment(cfg.DataDirectory)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create new segment: %w", err)
+		return nil, fmt.Errorf("%w: %v", ErrCreateSegment, err)
 	}
 
 	w := &Service{
@@ -80,7 +79,7 @@ func (w *Service) Write(entry entry.Entry) error {
 
 	// Wait for flush completion
 	if err := <-done; err != nil {
-		return fmt.Errorf("failed to flush WAL: %w", err)
+		return fmt.Errorf("%w: %v", ErrFlushWAL, err)
 	}
 
 	return nil
@@ -140,19 +139,19 @@ func (w *Service) flushBatch() error {
 	// Write entries and handle segment rotation
 	for _, entry := range w.batch {
 		if err := w.currentSegment.Write(entry); err != nil {
-			return fmt.Errorf("failed to write entry: %w", err)
+			return fmt.Errorf("%w: %v", ErrWriteEntry, err)
 		}
 
 		if w.currentSegment.Size() >= w.config.MaxSegmentSizeBytes {
 			if err := w.rotateSegment(); err != nil {
-				return fmt.Errorf("failed to rotate segment: %w", err)
+				return fmt.Errorf("%w: %v", ErrRotateSegment, err)
 			}
 		}
 	}
 
 	// Ensure durability by syncing to disk
 	if err := w.currentSegment.Sync(); err != nil {
-		return fmt.Errorf("failed to sync WAL: %w", err)
+		return fmt.Errorf("%w: %v", ErrSyncWAL, err)
 	}
 
 	w.batch = w.batch[:0]
@@ -163,7 +162,7 @@ func (w *Service) flushBatch() error {
 // rotateSegment creates a new segment and closes the current one
 func (w *Service) rotateSegment() error {
 	if err := w.currentSegment.Close(); err != nil {
-		return fmt.Errorf("failed to close current segment: %w", err)
+		return fmt.Errorf("%w: %v", ErrCloseSegment, err)
 	}
 
 	segment, err := segment.NewSegment(w.config.DataDirectory)
@@ -178,7 +177,7 @@ func (w *Service) rotateSegment() error {
 // Close closes the WAL
 func (w *Service) Close() error {
 	if w.quit == nil {
-		return errors.New("WAL already closed")
+		return ErrWALClosed
 	}
 	close(w.quit)
 	w.quit = nil // Prevent double close
@@ -186,7 +185,7 @@ func (w *Service) Close() error {
 	defer w.batchMu.Unlock()
 
 	if err := w.flushBatch(); err != nil {
-		return fmt.Errorf("failed to flush final batch: %w", err)
+		return fmt.Errorf("%w: %v", ErrFlushFinalBatch, err)
 	}
 
 	return w.currentSegment.Close()

@@ -1,0 +1,192 @@
+package segment
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/8thgencore/valchemy/internal/wal/entry"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func setupTestDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "segment_test_*")
+	require.NoError(t, err)
+	return dir
+}
+
+func TestNewSegment(t *testing.T) {
+	t.Run("успешное создание", func(t *testing.T) {
+		dir := setupTestDir(t)
+		defer os.RemoveAll(dir)
+
+		s, err := NewSegment(dir)
+		require.NoError(t, err)
+		assert.NotNil(t, s)
+		assert.Contains(t, s.filename, "wal-")
+		assert.Contains(t, s.filename, ".log")
+	})
+
+	t.Run("ошибка при создании директории без прав", func(t *testing.T) {
+		_, err := NewSegment("/root/test")
+		assert.Error(t, err)
+	})
+}
+
+func TestSegment_CreateSegmentFile(t *testing.T) {
+	t.Run("успешное создание файла", func(t *testing.T) {
+		dir := setupTestDir(t)
+		defer os.RemoveAll(dir)
+
+		s, err := NewSegment(dir)
+		require.NoError(t, err)
+
+		err = s.CreateSegmentFile()
+		require.NoError(t, err)
+		assert.NotNil(t, s.file)
+		assert.NotNil(t, s.writer)
+
+		// Проверяем что файл существует
+		_, err = os.Stat(s.filename)
+		assert.NoError(t, err)
+	})
+
+	t.Run("ошибка при создании файла без прав", func(t *testing.T) {
+		s := &segment{
+			filename: "/root/test/wal.log",
+		}
+		err := s.CreateSegmentFile()
+		assert.Error(t, err)
+	})
+}
+
+func TestSegment_Write(t *testing.T) {
+	t.Run("успешная запись", func(t *testing.T) {
+		dir := setupTestDir(t)
+		defer os.RemoveAll(dir)
+
+		s, err := NewSegment(dir)
+		require.NoError(t, err)
+
+		e := entry.Entry{
+			Operation: entry.OperationSet,
+			Key:       "test-key",
+			Value:     "test-value",
+		}
+
+		err = s.Write(e)
+		require.NoError(t, err)
+		assert.Greater(t, s.Size(), uint64(0))
+	})
+}
+
+func TestSegment_Sync(t *testing.T) {
+	t.Run("успешная синхронизация", func(t *testing.T) {
+		dir := setupTestDir(t)
+		defer os.RemoveAll(dir)
+
+		s, err := NewSegment(dir)
+		require.NoError(t, err)
+
+		err = s.CreateSegmentFile()
+		require.NoError(t, err)
+
+		err = s.Sync()
+		assert.NoError(t, err)
+	})
+
+	t.Run("синхронизация без открытого файла", func(t *testing.T) {
+		s := &segment{}
+		err := s.Sync()
+		assert.NoError(t, err)
+	})
+}
+
+func TestListSegments(t *testing.T) {
+	t.Run("успешное получение списка сегментов", func(t *testing.T) {
+		dir := setupTestDir(t)
+		defer os.RemoveAll(dir)
+
+		// Создаем несколько сегментов
+		for i := 0; i < 3; i++ {
+			s, err := NewSegment(dir)
+			require.NoError(t, err)
+			err = s.CreateSegmentFile()
+			require.NoError(t, err)
+			time.Sleep(time.Millisecond) // Для разных временных меток
+		}
+
+		segments, err := ListSegments(dir)
+		require.NoError(t, err)
+		assert.Len(t, segments, 3)
+	})
+
+	t.Run("пустая директория", func(t *testing.T) {
+		dir := setupTestDir(t)
+		defer os.RemoveAll(dir)
+
+		segments, err := ListSegments(dir)
+		require.NoError(t, err)
+		assert.Empty(t, segments)
+	})
+
+	t.Run("ошибка при чтении директории", func(t *testing.T) {
+		segments, err := ListSegments("/nonexistent")
+		assert.Error(t, err)
+		assert.Nil(t, segments)
+	})
+}
+
+func TestReadSegmentEntries(t *testing.T) {
+	t.Run("успешное чтение записей", func(t *testing.T) {
+		dir := setupTestDir(t)
+		defer os.RemoveAll(dir)
+
+		s, err := NewSegment(dir)
+		require.NoError(t, err)
+
+		// Записываем несколько записей
+		testEntries := []entry.Entry{
+			{Operation: entry.OperationSet, Key: "key1", Value: "value1"},
+			{Operation: entry.OperationSet, Key: "key2", Value: "value2"},
+		}
+
+		for _, e := range testEntries {
+			err = s.Write(e)
+			require.NoError(t, err)
+		}
+		require.NoError(t, s.Sync())
+		require.NoError(t, s.Close())
+
+		// Читаем записи
+		entries, err := ReadSegmentEntries(dir, filepath.Base(s.filename))
+		require.NoError(t, err)
+		assert.Len(t, entries, len(testEntries))
+	})
+
+	t.Run("ошибка при чтении несуществующего файла", func(t *testing.T) {
+		dir := setupTestDir(t)
+		defer os.RemoveAll(dir)
+
+		entries, err := ReadSegmentEntries(dir, "nonexistent.log")
+		assert.Error(t, err)
+		assert.Nil(t, entries)
+	})
+
+	t.Run("ошибка при чтении поврежденного файла", func(t *testing.T) {
+		dir := setupTestDir(t)
+		defer os.RemoveAll(dir)
+
+		// Создаем поврежденный файл
+		filename := filepath.Join(dir, "corrupted.log")
+		err := os.WriteFile(filename, []byte{1, 2, 3}, 0o600)
+		require.NoError(t, err)
+
+		entries, err := ReadSegmentEntries(dir, "corrupted.log")
+		assert.Error(t, err)
+		assert.Nil(t, entries)
+	})
+}

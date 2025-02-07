@@ -78,15 +78,15 @@ func (e *Engine) Set(key, value string) error {
 		Value:     value,
 	}
 
+	// Apply the change to in-memory state
+	e.applyEntry(entry)
+
 	// Write to WAL first without holding the mutex
 	if e.wal != nil {
 		if err := e.wal.Write(entry); err != nil {
 			return err
 		}
 	}
-
-	// Apply the change to in-memory state
-	e.applyEntry(entry)
 
 	return nil
 }

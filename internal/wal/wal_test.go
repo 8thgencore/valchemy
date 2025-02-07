@@ -1,13 +1,16 @@
 package wal
 
 import (
+	"errors"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/8thgencore/valchemy/internal/config"
 	"github.com/8thgencore/valchemy/internal/wal/entry"
+	"github.com/8thgencore/valchemy/internal/wal/segment/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -186,6 +189,62 @@ func TestWrite(t *testing.T) {
 	})
 }
 
+func TestWrite_Errors(t *testing.T) {
+	t.Run("error on segment write", func(t *testing.T) {
+		tw := setupWAL(t)
+		defer tw.cleanup()
+
+		tw.wal.currentSegment = &mocks.MockSegment{
+			WriteErr: errors.New("write error"),
+		}
+
+		err := tw.wal.Write(entry.Entry{
+			Operation: entry.OperationSet,
+			Key:       "key1",
+			Value:     "value1",
+		})
+		assert.Error(t, err)
+		assert.ErrorIs(t, errors.Unwrap(err), ErrFlushWAL)
+	})
+
+	t.Run("error on segment sync", func(t *testing.T) {
+		tw := setupWAL(t)
+		defer tw.cleanup()
+
+		tw.wal.currentSegment = &mocks.MockSegment{
+			SyncErr: errors.New("sync error"),
+		}
+		tw.wal.config.FlushingBatchSize = 1
+
+		err := tw.wal.Write(entry.Entry{
+			Operation: entry.OperationSet,
+			Key:       "key1",
+			Value:     "value1",
+		})
+		assert.Error(t, err)
+		assert.ErrorIs(t, errors.Unwrap(err), ErrSyncWAL)
+	})
+
+	t.Run("error on segment rotation", func(t *testing.T) {
+		tw := setupWAL(t)
+		defer tw.cleanup()
+
+		tw.wal.config.MaxSegmentSizeBytes = 1
+		tw.wal.currentSegment = &mocks.MockSegment{
+			Size_:    2,
+			CloseErr: errors.New("close error"),
+		}
+
+		err := tw.wal.Write(entry.Entry{
+			Operation: entry.OperationSet,
+			Key:       "key1",
+			Value:     "value1",
+		})
+		assert.Error(t, err)
+		assert.ErrorIs(t, errors.Unwrap(err), ErrFlushWAL)
+	})
+}
+
 func TestClose(t *testing.T) {
 	t.Run("close with pending entries", func(t *testing.T) {
 		t.Parallel()
@@ -230,6 +289,41 @@ func TestClose(t *testing.T) {
 		// Second close should not panic
 		err = tw.wal.Close()
 		assert.Error(t, err, "second close should return error")
+	})
+}
+
+func TestClose_Errors(t *testing.T) {
+	t.Run("error on final batch flush", func(t *testing.T) {
+		tw := setupWAL(t)
+		defer tw.cleanup()
+
+		tw.wal.currentSegment = &mocks.MockSegment{
+			SyncErr: errors.New("sync error"),
+		}
+
+		// Write an entry to create a batch
+		_ = tw.wal.Write(entry.Entry{
+			Operation: entry.OperationSet,
+			Key:       "key1",
+			Value:     "value1",
+		})
+
+		err := tw.wal.Close()
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, ErrFlushFinalBatch)
+	})
+
+	t.Run("error on segment close", func(t *testing.T) {
+		tw := setupWAL(t)
+		defer tw.cleanup()
+
+		tw.wal.currentSegment = &mocks.MockSegment{
+			CloseErr: ErrCloseSegment,
+		}
+
+		err := tw.wal.Close()
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, ErrCloseSegment)
 	})
 }
 
@@ -285,6 +379,36 @@ func TestRecover(t *testing.T) {
 		entries, err := tw.wal.Recover()
 		require.NoError(t, err)
 		assert.Empty(t, entries)
+	})
+}
+
+func TestRecover_Errors(t *testing.T) {
+	t.Run("error on listing segments", func(t *testing.T) {
+		tw := setupWAL(t)
+		defer tw.cleanup()
+
+		// Remove directory permissions
+		err := os.Chmod(tw.cfg.DataDirectory, 0o000)
+		require.NoError(t, err)
+		defer os.Chmod(tw.cfg.DataDirectory, 0o750)
+
+		entries, err := tw.wal.Recover()
+		assert.Error(t, err)
+		assert.Nil(t, entries)
+	})
+
+	t.Run("error on reading segment entries", func(t *testing.T) {
+		tw := setupWAL(t)
+		defer tw.cleanup()
+
+		// Create a corrupted segment file
+		segmentPath := filepath.Join(tw.cfg.DataDirectory, "wal-1.log")
+		err := os.WriteFile(segmentPath, []byte{1, 2, 3}, 0o600)
+		require.NoError(t, err)
+
+		entries, err := tw.wal.Recover()
+		assert.Error(t, err)
+		assert.Nil(t, entries)
 	})
 }
 
