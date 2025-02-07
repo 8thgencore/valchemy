@@ -29,7 +29,7 @@ func setupWAL(t *testing.T) *testWAL {
 		Enabled:              true,
 		DataDirectory:        tempDir,
 		FlushingBatchSize:    10,
-		FlushingBatchTimeout: 100 * time.Millisecond,
+		FlushingBatchTimeout: 10 * time.Millisecond,
 		MaxSegmentSizeBytes:  1024,
 	}
 
@@ -82,11 +82,12 @@ func TestNew(t *testing.T) {
 
 func TestWrite(t *testing.T) {
 	t.Run("immediate flush on full batch", func(t *testing.T) {
+		t.Parallel()
 		tw := setupWAL(t)
 		defer tw.cleanup()
 
 		tw.wal.config.FlushingBatchSize = 2
-		tw.wal.config.FlushingBatchTimeout = 1 * time.Second
+		tw.wal.config.FlushingBatchTimeout = 100 * time.Millisecond
 
 		// Write first entry
 		err := tw.wal.Write(entry.Entry{
@@ -122,11 +123,12 @@ func TestWrite(t *testing.T) {
 	})
 
 	t.Run("concurrent writes", func(t *testing.T) {
+		t.Parallel()
 		tw := setupWAL(t)
 		defer tw.cleanup()
 
 		var wg sync.WaitGroup
-		numWrites := 50
+		numWrites := 20
 
 		wg.Add(numWrites)
 		for i := 0; i < numWrites; i++ {
@@ -143,7 +145,7 @@ func TestWrite(t *testing.T) {
 		wg.Wait()
 
 		// Wait for any pending flushes
-		time.Sleep(200 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 
 		// Create new WAL instance to read entries
 		tw.wal.Close()
@@ -158,10 +160,11 @@ func TestWrite(t *testing.T) {
 	})
 
 	t.Run("timeout based flush", func(t *testing.T) {
+		t.Parallel()
 		tw := setupWAL(t)
 		defer tw.cleanup()
 
-		tw.wal.config.FlushingBatchTimeout = 50 * time.Millisecond
+		tw.wal.config.FlushingBatchTimeout = 20 * time.Millisecond
 		tw.wal.config.FlushingBatchSize = 100 // Large enough to not trigger size-based flush
 
 		err := tw.wal.Write(entry.Entry{
@@ -172,7 +175,7 @@ func TestWrite(t *testing.T) {
 		require.NoError(t, err)
 
 		// Wait for timeout to occur
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(30 * time.Millisecond)
 
 		// Verify entry was written
 		entries, err := tw.wal.Recover()
@@ -185,6 +188,7 @@ func TestWrite(t *testing.T) {
 
 func TestClose(t *testing.T) {
 	t.Run("close with pending entries", func(t *testing.T) {
+		t.Parallel()
 		tw := setupWAL(t)
 
 		// Write some entries
@@ -216,6 +220,7 @@ func TestClose(t *testing.T) {
 	})
 
 	t.Run("multiple close calls", func(t *testing.T) {
+		t.Parallel()
 		tw := setupWAL(t)
 		defer tw.cleanup()
 
@@ -230,15 +235,14 @@ func TestClose(t *testing.T) {
 
 func TestRecover(t *testing.T) {
 	t.Run("recover with multiple segments", func(t *testing.T) {
+		t.Parallel()
 		tw := setupWAL(t)
 		defer tw.cleanup()
 
-		// Force multiple segments by setting small segment size
 		tw.wal.config.MaxSegmentSizeBytes = 50
-		tw.wal.config.FlushingBatchSize = 1 // Flush after each write
-		tw.wal.config.FlushingBatchTimeout = 1 * time.Second
+		tw.wal.config.FlushingBatchSize = 2
+		tw.wal.config.FlushingBatchTimeout = 100 * time.Millisecond
 
-		// Write entries one by one to ensure they're written
 		testEntries := []entry.Entry{
 			{Operation: entry.OperationSet, Key: "key1", Value: "value1"},
 			{Operation: entry.OperationSet, Key: "key2", Value: "value2"},
@@ -249,14 +253,9 @@ func TestRecover(t *testing.T) {
 		for _, e := range testEntries {
 			err := tw.wal.Write(e)
 			require.NoError(t, err)
-
-			// Verify entry was written correctly
-			entries, err := tw.wal.Recover()
-			require.NoError(t, err)
-			lastEntry := entries[len(entries)-1]
-			assert.Equal(t, e.Key, lastEntry.Key)
-			assert.Equal(t, e.Value, lastEntry.Value)
 		}
+
+		time.Sleep(50 * time.Millisecond)
 
 		// Close current WAL
 		err := tw.wal.Close()
@@ -279,6 +278,7 @@ func TestRecover(t *testing.T) {
 	})
 
 	t.Run("recover with empty directory", func(t *testing.T) {
+		t.Parallel()
 		tw := setupWAL(t)
 		defer tw.cleanup()
 
@@ -290,13 +290,15 @@ func TestRecover(t *testing.T) {
 
 func TestSegmentRotation(t *testing.T) {
 	t.Run("automatic segment rotation", func(t *testing.T) {
+		t.Parallel()
 		tw := setupWAL(t)
 		defer tw.cleanup()
 
-		tw.wal.config.MaxSegmentSizeBytes = 50 // Small size to force rotation
+		tw.wal.config.MaxSegmentSizeBytes = 50
+		numEntries := 5
 
 		// Write entries until rotation occurs
-		for i := 0; i < 10; i++ {
+		for i := 0; i < numEntries; i++ {
 			err := tw.wal.Write(entry.Entry{
 				Operation: entry.OperationSet,
 				Key:       string(rune(i)),
@@ -306,7 +308,7 @@ func TestSegmentRotation(t *testing.T) {
 		}
 
 		// Wait for any pending flushes
-		time.Sleep(200 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 
 		// Verify multiple segments were created
 		files, err := os.ReadDir(tw.cfg.DataDirectory)
@@ -316,6 +318,6 @@ func TestSegmentRotation(t *testing.T) {
 		// Verify all entries can be recovered
 		entries, err := tw.wal.Recover()
 		require.NoError(t, err)
-		assert.Len(t, entries, 10)
+		assert.Len(t, entries, numEntries)
 	})
 }

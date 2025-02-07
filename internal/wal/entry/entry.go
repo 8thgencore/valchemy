@@ -7,19 +7,21 @@ import (
 	"math"
 )
 
-// OperationType defines the type of operation
-type OperationType byte
+// Operation represents the type of operation in the WAL
+type Operation byte
 
 const (
 	// OperationSet is the set operation
-	OperationSet OperationType = 1
+	OperationSet Operation = 1
 	// OperationDelete is the delete operation
-	OperationDelete OperationType = 2
+	OperationDelete Operation = 2
+	// OperationClear is the clear operation
+	OperationClear Operation = 3
 )
 
-// Entry represents a record in the WAL
+// Entry represents a single WAL entry
 type Entry struct {
-	Operation OperationType
+	Operation Operation
 	Key       string
 	Value     string
 }
@@ -89,7 +91,7 @@ func (e *Entry) ReadFrom(r io.Reader) (int64, error) {
 		return total, err
 	}
 	total += int64(n)
-	e.Operation = OperationType(opByte[0])
+	e.Operation = Operation(opByte[0])
 
 	// Read key length using a preallocated buffer
 	buf := make([]byte, 4)

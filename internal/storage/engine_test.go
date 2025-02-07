@@ -2,8 +2,10 @@ package storage
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/8thgencore/valchemy/internal/wal/entry"
@@ -130,5 +132,59 @@ func TestEngine(t *testing.T) {
 
 		<-done
 		<-done
+	})
+
+	t.Run("Concurrent Set operations", func(t *testing.T) {
+		logger, mockWAL := setupTest(t)
+		engine := NewEngine(logger, mockWAL)
+
+		const iterations = 100
+		var wg sync.WaitGroup
+		wg.Add(2)
+
+		go func() {
+			defer wg.Done()
+			for i := 0; i < iterations; i++ {
+				err := engine.Set("key", fmt.Sprintf("value1_%d", i))
+				require.NoError(t, err)
+			}
+		}()
+
+		go func() {
+			defer wg.Done()
+			for i := 0; i < iterations; i++ {
+				err := engine.Set("key", fmt.Sprintf("value2_%d", i))
+				require.NoError(t, err)
+			}
+		}()
+
+		wg.Wait()
+
+		// Verify that the last write won
+		value, exists := engine.Get("key")
+		assert.True(t, exists)
+		assert.Contains(t, value, "value")
+	})
+
+	t.Run("Clear operation", func(t *testing.T) {
+		logger, mockWAL := setupTest(t)
+		engine := NewEngine(logger, mockWAL)
+
+		// Set some data
+		require.NoError(t, engine.Set("key1", "value1"))
+		require.NoError(t, engine.Set("key2", "value2"))
+
+		// Clear all data
+		require.NoError(t, engine.Clear())
+
+		// Verify data is cleared
+		_, exists := engine.Get("key1")
+		assert.False(t, exists)
+		_, exists = engine.Get("key2")
+		assert.False(t, exists)
+
+		// Verify WAL entries
+		require.Len(t, mockWAL.Entries, 3)
+		assert.Equal(t, entry.OperationClear, mockWAL.Entries[2].Operation)
 	})
 }
