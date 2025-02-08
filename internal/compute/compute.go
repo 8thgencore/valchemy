@@ -20,6 +20,11 @@ func NewHandler(log *slog.Logger, engine *storage.Engine) *Handler {
 
 // Handle handles a command
 func (h *Handler) Handle(input string) (string, error) {
+	// If input is empty, do nothing
+	if input == "" {
+		return "", nil
+	}
+
 	h.log.Debug("Handling command: " + input)
 
 	cmd, err := ParseCommand(input)
@@ -46,6 +51,12 @@ func (h *Handler) Handle(input string) (string, error) {
 
 	case CommandDel:
 		if err := h.engine.Delete(cmd.Args[0]); err != nil {
+			return "", err
+		}
+		return ResponseOK, nil
+
+	case CommandClear:
+		if err := h.engine.Clear(); err != nil {
 			return "", err
 		}
 		return ResponseOK, nil
