@@ -58,7 +58,7 @@ func validateCommand(cmd Command) error {
 		if len(cmd.Args) != 1 {
 			return ErrInvalidFormat
 		}
-	case CommandHelp, "?":
+	case CommandClear, CommandHelp, "?":
 		if len(cmd.Args) != 0 {
 			return ErrInvalidFormat
 		}

@@ -97,7 +97,11 @@ func (s *Server) handleConnection(conn net.Conn) {
 		}
 
 		// Add a special end message marker
-		response = response + "\n" + constants.EndMarker
+		if response != "" {
+			response = response + "\n" + constants.EndMarker
+		} else {
+			response = constants.EndMarker
+		}
 
 		if _, err := conn.Write([]byte(response)); err != nil {
 			s.log.Error("Failed to write response", sl.Err(err))
