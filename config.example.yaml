@@ -23,21 +23,22 @@ wal:
   max_segment_size: "10MB"           # Maximum size of WAL segment files
   data_directory: "./data/wal"       # Directory for WAL storage
 
-# Replication settings (choose either master or slave configuration)
+# Replication settings (choose either master or replica configuration)
 replication:
   # -------------------------------------------------------------------
   # Master node configuration (uncomment to use)
   # -------------------------------------------------------------------
   # replica_type: "master"           # Node replication role
-  # replication_port: "3233"         # Port for slave connections
-  # replication_timeout: "30s"       # Slave connection timeout
+  # replication_port: "3233"         # Port for replica connections
+  # replication_timeout: "30s"       # Replica connection timeout
 
   # -------------------------------------------------------------------
-  # Slave node configuration (uncomment to use)
+  # Replica node configuration (uncomment to use)
   # -------------------------------------------------------------------
-  # replica_type: "slave"            # Node replication role
+  # replica_type: "replica"          # Node replication role
   # master_host: "127.0.0.1"         # Master node API address
   # replication_port: "3233"         # Master's replication port
   # sync_interval: "1s"              # Replication sync interval
   # sync_retry_delay: "500ms"        # Delay between sync retries
   # sync_retry_count: 3              # Number of sync retries
+  # read_timeout: "10s"              # Read timeout for replica connections

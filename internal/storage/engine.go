@@ -7,6 +7,7 @@ import (
 
 	"github.com/8thgencore/valchemy/internal/wal"
 	"github.com/8thgencore/valchemy/internal/wal/entry"
+	"github.com/8thgencore/valchemy/pkg/logger/sl"
 )
 
 // Engine is a struct that represents the storage engine
@@ -42,7 +43,7 @@ func NewEngine(log *slog.Logger, w wal.WAL) *Engine {
 	if w != nil {
 		entries, err := w.Recover()
 		if err != nil {
-			log.Error("Failed to recover from WAL", "error", err)
+			log.Error("Failed to recover from WAL", sl.Err(err))
 		}
 
 		// Apply recovered entries

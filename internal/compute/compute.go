@@ -3,18 +3,24 @@ package compute
 import (
 	"log/slog"
 
+	"github.com/8thgencore/valchemy/internal/config"
 	"github.com/8thgencore/valchemy/internal/storage"
 )
 
 // Handler is a struct that handles commands
 type Handler struct {
-	log    *slog.Logger
-	engine *storage.Engine
+	log         *slog.Logger
+	engine      *storage.Engine
+	replicaType config.ReplicationType
 }
 
 // NewHandler creates a new Handler
-func NewHandler(log *slog.Logger, engine *storage.Engine) *Handler {
-	return &Handler{log: log, engine: engine}
+func NewHandler(log *slog.Logger, engine *storage.Engine, replicaType config.ReplicationType) *Handler {
+	return &Handler{
+		log:         log,
+		engine:      engine,
+		replicaType: replicaType,
+	}
 }
 
 // Handle handles a command string
@@ -36,6 +42,16 @@ func (h *Handler) Handle(input string) (string, error) {
 
 // handleCommand handles a parsed command (exported for testing)
 func (h *Handler) handleCommand(cmd Command) (string, error) {
+	// Check if we're on replica and command is not allowed
+	if h.replicaType == config.Replica {
+		switch cmd.Type {
+		case CommandHelp, CommandGet:
+			// These commands are allowed
+		default:
+			return "", ErrReadOnlyReplica
+		}
+	}
+
 	switch cmd.Type {
 	case CommandHelp:
 		return HelpMessage, nil

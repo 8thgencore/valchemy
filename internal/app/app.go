@@ -45,7 +45,7 @@ func New(configPath string) (*App, error) {
 	engine := storage.NewEngine(log, w)
 
 	// Initialize command handler
-	handler := compute.NewHandler(log, engine)
+	handler := compute.NewHandler(log, engine, cfg.Replication.ReplicaType)
 
 	// Initialize server
 	srv := server.NewServer(log, &cfg.Network, handler)

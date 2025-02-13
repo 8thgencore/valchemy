@@ -6,6 +6,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/8thgencore/valchemy/internal/config"
 	"github.com/8thgencore/valchemy/internal/storage"
 	"github.com/8thgencore/valchemy/internal/wal/mocks"
 	"github.com/stretchr/testify/assert"
@@ -16,9 +17,44 @@ func setupTest(_ *testing.T) (*Handler, *storage.Engine, *mocks.MockWAL) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	mockWAL := mocks.NewMockWAL()
 	engine := storage.NewEngine(logger, mockWAL)
-	handler := NewHandler(logger, engine)
+	handler := NewHandler(logger, engine, config.Master)
 
 	return handler, engine, mockWAL
+}
+
+func TestReplicaHandler(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	mockWAL := mocks.NewMockWAL()
+	engine := storage.NewEngine(logger, mockWAL)
+	handler := NewHandler(logger, engine, config.Replica)
+
+	t.Run("Allowed commands on replica", func(t *testing.T) {
+		// Test GET command
+		engine.Set("key1", "value1")
+		result, err := handler.Handle("GET key1")
+		require.NoError(t, err)
+		assert.Equal(t, "value1", result)
+
+		// Test HELP command
+		result, err = handler.Handle("HELP")
+		require.NoError(t, err)
+		assert.Equal(t, HelpMessage, result)
+	})
+
+	t.Run("Forbidden commands on replica", func(t *testing.T) {
+		testCases := []string{
+			"SET key1 value1",
+			"DEL key1",
+			"CLEAR",
+		}
+
+		for _, cmd := range testCases {
+			result, err := handler.Handle(cmd)
+			assert.Error(t, err)
+			assert.Equal(t, "replica is read-only: only GET and HELP commands are allowed", err.Error())
+			assert.Empty(t, result)
+		}
+	})
 }
 
 func TestHandler(t *testing.T) {

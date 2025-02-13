@@ -13,3 +13,6 @@ var ErrUnknownCommand = errors.New("unknown command")
 
 // ErrInvalidSetFormat is an error that occurs when the SET command format is invalid
 var ErrInvalidSetFormat = errors.New("invalid SET command format")
+
+// ErrReadOnlyReplica is an error that occurs when the replica is read-only
+var ErrReadOnlyReplica = errors.New("replica is read-only: only GET and HELP commands are allowed")

@@ -1,6 +1,7 @@
 package replication
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -10,13 +11,15 @@ import (
 
 	"github.com/8thgencore/valchemy/internal/config"
 	"github.com/8thgencore/valchemy/internal/wal/segment"
+	"github.com/8thgencore/valchemy/pkg/logger/sl"
 )
 
-// Manager handles replication logic for both master and slave nodes
+// Manager handles replication logic for both master and replica nodes
 type Manager struct {
 	cfg    config.ReplicationConfig
 	log    *slog.Logger
 	walDir string
+	conn   net.Conn
 }
 
 // New creates a new replication manager
@@ -33,8 +36,8 @@ func (m *Manager) Start() error {
 	switch m.cfg.ReplicaType {
 	case config.Master:
 		return m.startMaster()
-	case config.Slave:
-		return m.startSlave()
+	case config.Replica:
+		return m.startReplica()
 	default:
 		return fmt.Errorf("unknown replica type: %s", m.cfg.ReplicaType)
 	}
@@ -42,7 +45,7 @@ func (m *Manager) Start() error {
 
 // startMaster starts the master replication service
 func (m *Manager) startMaster() error {
-	// Start TCP server for slaves to connect on the replication port
+	// Start TCP server for replicas to connect on the replication port
 	replicationAddress := fmt.Sprintf("%s:%s", m.cfg.MasterHost, m.cfg.ReplicationPort)
 	listener, err := net.Listen("tcp", replicationAddress)
 	if err != nil {
@@ -57,55 +60,82 @@ func (m *Manager) startMaster() error {
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
-				m.log.Error("Failed to accept slave connection", "error", err)
+				m.log.Error("Failed to accept replica connection", sl.Err(err))
 				continue
 			}
 
-			go m.handleSlaveConnection(conn)
+			go m.handleReplicaConnection(conn)
 		}
 	}()
 
 	return nil
 }
 
-// handleSlaveConnection handles incoming slave connections
-func (m *Manager) handleSlaveConnection(conn net.Conn) {
+// handleReplicaConnection handles incoming replica connections
+func (m *Manager) handleReplicaConnection(conn net.Conn) {
 	defer func() {
 		if err := conn.Close(); err != nil {
-			m.log.Error("Failed to close connection", "error", err)
+			m.log.Error("Failed to close connection", sl.Err(err))
 		}
 	}()
 
-	m.log.Info("New slave connected", "address", conn.RemoteAddr())
+	m.log.Info("New replica connected", "address", conn.RemoteAddr())
 
-	// Read slave's last segment ID
-	var lastSegmentID int64
-	if _, err := fmt.Fscanf(conn, "%d\n", &lastSegmentID); err != nil {
-		m.log.Error("Failed to read slave's last segment ID", "error", err)
+	// Set read timeout
+	if err := conn.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
+		m.log.Error("Failed to set read deadline", sl.Err(err))
 		return
 	}
 
-	// Get list of segments after lastSegmentID
-	segments, err := segment.ListSegments(m.walDir)
-	if err != nil {
-		m.log.Error("Failed to list segments", "error", err)
-		return
-	}
+	for {
+		// Read replica's last segment ID
+		var lastSegmentID int64
+		if _, err := fmt.Fscanf(conn, "%d\n", &lastSegmentID); err != nil {
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				// Update timeout and continue
+				if err := conn.SetReadDeadline(time.Now().Add(m.cfg.ReadTimeout)); err != nil {
+					m.log.Error("Failed to update read deadline", sl.Err(err))
+					return
+				}
+				continue
+			}
+			// If error is not timeout - replica is disconnected
+			m.log.Info("Replica disconnected", "address", conn.RemoteAddr())
 
-	// Send new segments to slave
-	for _, seg := range segments {
-		if seg.ID <= lastSegmentID {
-			continue
-		}
-
-		if err := m.sendSegment(conn, seg); err != nil {
-			m.log.Error("Failed to send segment", "error", err, "segment_id", seg.ID)
 			return
 		}
+
+		// Reset timeout after successful read
+		if err := conn.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
+			m.log.Error("Failed to reset read deadline", sl.Err(err))
+			return
+		}
+
+		// Get list of segments after lastSegmentID
+		segments, err := segment.ListSegments(m.walDir)
+		if err != nil {
+			m.log.Error("Failed to list segments", sl.Err(err))
+			return
+		}
+
+		// Send new segments to replica
+		for _, seg := range segments {
+			if seg.ID <= lastSegmentID {
+				continue
+			}
+
+			if err := m.sendSegment(conn, seg); err != nil {
+				m.log.Error("Failed to send segment", sl.Err(err), "segment_id", seg.ID)
+				return
+			}
+		}
+
+		// Small pause before next synchronization
+		time.Sleep(m.cfg.SyncInterval)
 	}
 }
 
-// sendSegment sends a WAL segment to a slave
+// sendSegment sends a WAL segment to a replica
 func (m *Manager) sendSegment(conn net.Conn, segInfo segment.Info) error {
 	// Read segment file
 	data, err := os.ReadFile(filepath.Join(m.walDir, segInfo.Name))
@@ -126,54 +156,62 @@ func (m *Manager) sendSegment(conn net.Conn, segInfo segment.Info) error {
 	return nil
 }
 
-// startSlave starts the slave replication service
-func (m *Manager) startSlave() error {
-	m.log.Info("Starting slave replication service", "master", m.cfg.MasterHost)
+// startReplica starts the replica replication service
+func (m *Manager) startReplica() error {
+	m.log.Info("Starting replica replication service", "master", m.cfg.MasterHost)
 
 	go func() {
 		for {
-			if err := m.syncWithMaster(); err != nil {
-				m.log.Error("Failed to sync with master", "error", err)
+			if err := m.maintainMasterConnection(); err != nil {
+				m.log.Error("Failed to maintain master connection", sl.Err(err))
+				time.Sleep(m.cfg.SyncRetryDelay)
 			}
-			time.Sleep(m.cfg.SyncInterval)
 		}
 	}()
 
 	return nil
 }
 
-// syncWithMaster synchronizes WAL segments with the master
-func (m *Manager) syncWithMaster() error {
-	// Connect to master's replication port
+// maintainMasterConnection establishes and maintains a connection to the master
+func (m *Manager) maintainMasterConnection() error {
+	if m.conn != nil {
+		if err := m.conn.Close(); err != nil {
+			m.log.Error("Failed to close connection", sl.Err(err))
+		}
+		m.conn = nil
+	}
+
 	replicationAddress := fmt.Sprintf("%s:%s", m.cfg.MasterHost, m.cfg.ReplicationPort)
 
-	var conn net.Conn
 	var err error
-
-	syncRetryCount := m.cfg.SyncRetryCount
+	retryCount := m.cfg.SyncRetryCount
 
 	// Try connecting with retries
 	for {
-		conn, err = net.Dial("tcp", replicationAddress)
+		m.conn, err = net.Dial("tcp", replicationAddress)
 		if err == nil {
+			m.log.Info("Connected to master", "address", replicationAddress)
 			break
 		}
 		m.log.Error("Failed to connect to master, retrying",
-			"error", err,
+			sl.Err(err),
 			"retry_delay", m.cfg.SyncRetryDelay)
-		if syncRetryCount > 0 {
-			syncRetryCount--
+		if retryCount > 0 {
+			retryCount--
 		} else {
-			return fmt.Errorf("failed to connect to master after %d retries: %w", syncRetryCount, err)
+			return fmt.Errorf("failed to connect to master after %d retries: %w", m.cfg.SyncRetryCount, err)
 		}
 		time.Sleep(m.cfg.SyncRetryDelay)
 	}
 
-	defer func() {
-		if err := conn.Close(); err != nil {
-			m.log.Error("Failed to close connection", "error", err)
-		}
-	}()
+	return m.syncWithMaster()
+}
+
+// syncWithMaster synchronizes WAL segments with the master
+func (m *Manager) syncWithMaster() error {
+	if m.conn == nil {
+		return errors.New("no active connection to master")
+	}
 
 	// Get last local segment ID
 	segments, err := segment.ListSegments(m.walDir)
@@ -187,14 +225,14 @@ func (m *Manager) syncWithMaster() error {
 	}
 
 	// Send last segment ID to master
-	if _, err := fmt.Fprintf(conn, "%d\n", lastSegmentID); err != nil {
+	if _, err := fmt.Fprintf(m.conn, "%d\n", lastSegmentID); err != nil {
 		return fmt.Errorf("failed to send last segment ID: %w", err)
 	}
 
 	// Receive and process new segments
 	for {
 		var segmentID, size int64
-		if _, err := fmt.Fscanf(conn, "%d %d\n", &segmentID, &size); err != nil {
+		if _, err := fmt.Fscanf(m.conn, "%d %d\n", &segmentID, &size); err != nil {
 			if err.Error() == "EOF" {
 				break
 			}
@@ -203,7 +241,7 @@ func (m *Manager) syncWithMaster() error {
 
 		// Read segment data
 		data := make([]byte, size)
-		if _, err := conn.Read(data); err != nil {
+		if _, err := m.conn.Read(data); err != nil {
 			return fmt.Errorf("failed to read segment data: %w", err)
 		}
 

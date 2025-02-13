@@ -63,8 +63,8 @@ type ReplicationType string
 const (
 	// Master is the leader node that accepts writes
 	Master ReplicationType = "master"
-	// Slave is the follower node that replicates from master
-	Slave ReplicationType = "slave"
+	// Replica is the follower node that replicates from master
+	Replica ReplicationType = "replica"
 )
 
 // ReplicationConfig configures the replication settings
@@ -75,6 +75,7 @@ type ReplicationConfig struct {
 	SyncInterval    time.Duration   `yaml:"sync_interval" env-default:"1s"`
 	SyncRetryDelay  time.Duration   `yaml:"sync_retry_delay" env-default:"500ms"`
 	SyncRetryCount  int             `yaml:"sync_retry_count" env-default:"3"`
+	ReadTimeout     time.Duration   `yaml:"read_timeout" env-default:"10s"`
 }
 
 // NewConfig creates a new instance of Config.
