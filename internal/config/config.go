@@ -88,7 +88,11 @@ func NewConfig(path string) (*Config, error) {
 	}
 
 	// Calculate MaxSegmentSizeBytes
-	cfg.WAL.MaxSegmentSizeBytes = parseSize(cfg.WAL.MaxSegmentSize)
+	maxSegmentSizeBytes, err := parseSize(cfg.WAL.MaxSegmentSize)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse max segment size: %w", err)
+	}
+	cfg.WAL.MaxSegmentSizeBytes = maxSegmentSizeBytes
 
 	return cfg, nil
 }
