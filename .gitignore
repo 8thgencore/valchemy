@@ -44,3 +44,6 @@ tmp/
 
 # Data directory
 data/
+
+# config file
+config.yaml
