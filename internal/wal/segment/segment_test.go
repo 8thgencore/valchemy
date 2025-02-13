@@ -19,7 +19,7 @@ func setupTestDir(t *testing.T) string {
 }
 
 func TestNewSegment(t *testing.T) {
-	t.Run("успешное создание", func(t *testing.T) {
+	t.Run("Successfully create segment", func(t *testing.T) {
 		dir := setupTestDir(t)
 		defer os.RemoveAll(dir)
 
@@ -30,14 +30,14 @@ func TestNewSegment(t *testing.T) {
 		assert.Contains(t, s.filename, ".log")
 	})
 
-	t.Run("ошибка при создании директории без прав", func(t *testing.T) {
+	t.Run("error creating directory without permissions", func(t *testing.T) {
 		_, err := NewSegment("/root/test")
 		assert.Error(t, err)
 	})
 }
 
 func TestSegment_CreateSegmentFile(t *testing.T) {
-	t.Run("успешное создание файла", func(t *testing.T) {
+	t.Run("Successfully create file", func(t *testing.T) {
 		dir := setupTestDir(t)
 		defer os.RemoveAll(dir)
 
@@ -49,12 +49,12 @@ func TestSegment_CreateSegmentFile(t *testing.T) {
 		assert.NotNil(t, s.file)
 		assert.NotNil(t, s.writer)
 
-		// Проверяем что файл существует
+		// Check that the file exists
 		_, err = os.Stat(s.filename)
 		assert.NoError(t, err)
 	})
 
-	t.Run("ошибка при создании файла без прав", func(t *testing.T) {
+	t.Run("error creating file without permissions", func(t *testing.T) {
 		s := &segment{
 			filename: "/root/test/wal.log",
 		}
@@ -64,7 +64,7 @@ func TestSegment_CreateSegmentFile(t *testing.T) {
 }
 
 func TestSegment_Write(t *testing.T) {
-	t.Run("успешная запись", func(t *testing.T) {
+	t.Run("successful write", func(t *testing.T) {
 		dir := setupTestDir(t)
 		defer os.RemoveAll(dir)
 
@@ -84,7 +84,7 @@ func TestSegment_Write(t *testing.T) {
 }
 
 func TestSegment_Sync(t *testing.T) {
-	t.Run("успешная синхронизация", func(t *testing.T) {
+	t.Run("successful synchronization", func(t *testing.T) {
 		dir := setupTestDir(t)
 		defer os.RemoveAll(dir)
 
@@ -98,7 +98,7 @@ func TestSegment_Sync(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
-	t.Run("синхронизация без открытого файла", func(t *testing.T) {
+	t.Run("synchronization without open file", func(t *testing.T) {
 		s := &segment{}
 		err := s.Sync()
 		assert.NoError(t, err)
@@ -106,17 +106,17 @@ func TestSegment_Sync(t *testing.T) {
 }
 
 func TestListSegments(t *testing.T) {
-	t.Run("успешное получение списка сегментов", func(t *testing.T) {
+	t.Run("successful get list of segments", func(t *testing.T) {
 		dir := setupTestDir(t)
 		defer os.RemoveAll(dir)
 
-		// Создаем несколько сегментов
+		// Create several segments
 		for i := 0; i < 3; i++ {
 			s, err := NewSegment(dir)
 			require.NoError(t, err)
 			err = s.CreateSegmentFile()
 			require.NoError(t, err)
-			time.Sleep(time.Millisecond) // Для разных временных меток
+			time.Sleep(time.Millisecond) // For different timestamps
 		}
 
 		segments, err := ListSegments(dir)
@@ -124,7 +124,7 @@ func TestListSegments(t *testing.T) {
 		assert.Len(t, segments, 3)
 	})
 
-	t.Run("пустая директория", func(t *testing.T) {
+	t.Run("empty directory", func(t *testing.T) {
 		dir := setupTestDir(t)
 		defer os.RemoveAll(dir)
 
@@ -133,7 +133,7 @@ func TestListSegments(t *testing.T) {
 		assert.Empty(t, segments)
 	})
 
-	t.Run("ошибка при чтении директории", func(t *testing.T) {
+	t.Run("error reading directory", func(t *testing.T) {
 		segments, err := ListSegments("/nonexistent")
 		assert.Error(t, err)
 		assert.Nil(t, segments)
@@ -141,14 +141,14 @@ func TestListSegments(t *testing.T) {
 }
 
 func TestReadSegmentEntries(t *testing.T) {
-	t.Run("успешное чтение записей", func(t *testing.T) {
+	t.Run("successful read entries", func(t *testing.T) {
 		dir := setupTestDir(t)
 		defer os.RemoveAll(dir)
 
 		s, err := NewSegment(dir)
 		require.NoError(t, err)
 
-		// Записываем несколько записей
+		// Write several entries
 		testEntries := []entry.Entry{
 			{Operation: entry.OperationSet, Key: "key1", Value: "value1"},
 			{Operation: entry.OperationSet, Key: "key2", Value: "value2"},
@@ -161,13 +161,13 @@ func TestReadSegmentEntries(t *testing.T) {
 		require.NoError(t, s.Sync())
 		require.NoError(t, s.Close())
 
-		// Читаем записи
+		// Read entries
 		entries, err := ReadSegmentEntries(dir, filepath.Base(s.filename))
 		require.NoError(t, err)
 		assert.Len(t, entries, len(testEntries))
 	})
 
-	t.Run("ошибка при чтении несуществующего файла", func(t *testing.T) {
+	t.Run("error reading non-existent file", func(t *testing.T) {
 		dir := setupTestDir(t)
 		defer os.RemoveAll(dir)
 
@@ -176,11 +176,11 @@ func TestReadSegmentEntries(t *testing.T) {
 		assert.Nil(t, entries)
 	})
 
-	t.Run("ошибка при чтении поврежденного файла", func(t *testing.T) {
+	t.Run("error reading corrupted file", func(t *testing.T) {
 		dir := setupTestDir(t)
 		defer os.RemoveAll(dir)
 
-		// Создаем поврежденный файл
+		// Create a corrupted file
 		filename := filepath.Join(dir, "corrupted.log")
 		err := os.WriteFile(filename, []byte{1, 2, 3}, 0o600)
 		require.NoError(t, err)

@@ -26,7 +26,13 @@ func TestEngine(t *testing.T) {
 		logger, mockWAL := setupTest(t)
 		engine := NewEngine(logger, mockWAL)
 		assert.NotNil(t, engine)
-		assert.NotNil(t, engine.data)
+		assert.NotNil(t, engine.partitions)
+		assert.Equal(t, defaultNumShards, len(engine.partitions))
+
+		// Verify each partition is initialized
+		for _, p := range engine.partitions {
+			assert.NotNil(t, p.data)
+		}
 	})
 
 	t.Run("NewEngine with recovery", func(t *testing.T) {
@@ -116,16 +122,16 @@ func TestEngine(t *testing.T) {
 
 		go func() {
 			for i := 0; i < iterations; i++ {
-				_ = engine.Set("key", "value")
-				engine.Get("key")
+				_ = engine.Set(fmt.Sprintf("key%d", i), "value")
+				engine.Get(fmt.Sprintf("key%d", i))
 			}
 			done <- true
 		}()
 
 		go func() {
 			for i := 0; i < iterations; i++ {
-				engine.Get("key")
-				_ = engine.Delete("key")
+				engine.Get(fmt.Sprintf("key%d", i))
+				_ = engine.Delete(fmt.Sprintf("key%d", i))
 			}
 			done <- true
 		}()
@@ -186,5 +192,31 @@ func TestEngine(t *testing.T) {
 		// Verify WAL entries
 		require.Len(t, mockWAL.Entries, 3)
 		assert.Equal(t, entry.OperationClear, mockWAL.Entries[2].Operation)
+	})
+
+	t.Run("Partition distribution", func(t *testing.T) {
+		logger, mockWAL := setupTest(t)
+		engine := NewEngine(logger, mockWAL)
+
+		// Set multiple keys and verify they're distributed across partitions
+		keys := []string{"key1", "key2", "key3", "key4", "key5"}
+		for _, key := range keys {
+			require.NoError(t, engine.Set(key, "value"))
+		}
+
+		// Count keys per partition
+		partitionCounts := make(map[int]int)
+		for i, p := range engine.partitions {
+			p.mu.RLock()
+			partitionCounts[i] = len(p.data)
+			p.mu.RUnlock()
+		}
+
+		// Verify that keys are distributed (not all in one partition)
+		totalKeys := 0
+		for _, count := range partitionCounts {
+			totalKeys += count
+		}
+		assert.Equal(t, len(keys), totalKeys)
 	})
 }

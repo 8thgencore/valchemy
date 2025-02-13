@@ -19,11 +19,12 @@ const (
 
 // Config is the configuration for the application
 type Config struct {
-	Env     Env `env:"ENV" env-default:"dev"`
-	Engine  EngineConfig
-	Network NetworkConfig
-	Logging LoggingConfig
-	WAL     WALConfig
+	Env         Env `env:"ENV" env-default:"dev"`
+	Engine      EngineConfig
+	Network     NetworkConfig
+	Logging     LoggingConfig
+	WAL         WALConfig
+	Replication ReplicationConfig
 }
 
 // EngineConfig is the configuration for the engine
@@ -43,6 +44,7 @@ type NetworkConfig struct {
 type LoggingConfig struct {
 	Level  string `yaml:"level" env-default:"info"`
 	Output string `yaml:"output" env-default:"stdout"`
+	Format string `yaml:"format" env-default:"text"`
 }
 
 // WALConfig configures the Write-Ahead Logging (WAL)
@@ -53,6 +55,27 @@ type WALConfig struct {
 	MaxSegmentSize       string        `yaml:"max_segment_size" env-default:"10MB"`
 	MaxSegmentSizeBytes  uint64        `yaml:"-"` // calculated field
 	DataDirectory        string        `yaml:"data_directory" env-default:"./data/wal"`
+}
+
+// ReplicationType defines the type of replication node
+type ReplicationType string
+
+const (
+	// Master is the leader node that accepts writes
+	Master ReplicationType = "master"
+	// Replica is the follower node that replicates from master
+	Replica ReplicationType = "replica"
+)
+
+// ReplicationConfig configures the replication settings
+type ReplicationConfig struct {
+	ReplicaType     ReplicationType `yaml:"replica_type" env-default:"master"`
+	MasterHost      string          `yaml:"master_host,omitempty"`
+	ReplicationPort string          `yaml:"replication_port" env-default:"3233"`
+	SyncInterval    time.Duration   `yaml:"sync_interval" env-default:"1s"`
+	SyncRetryDelay  time.Duration   `yaml:"sync_retry_delay" env-default:"500ms"`
+	SyncRetryCount  int             `yaml:"sync_retry_count" env-default:"3"`
+	ReadTimeout     time.Duration   `yaml:"read_timeout" env-default:"10s"`
 }
 
 // NewConfig creates a new instance of Config.
@@ -70,7 +93,11 @@ func NewConfig(path string) (*Config, error) {
 	}
 
 	// Calculate MaxSegmentSizeBytes
-	cfg.WAL.MaxSegmentSizeBytes = parseSize(cfg.WAL.MaxSegmentSize)
+	maxSegmentSizeBytes, err := parseSize(cfg.WAL.MaxSegmentSize)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse max segment size: %w", err)
+	}
+	cfg.WAL.MaxSegmentSizeBytes = maxSegmentSizeBytes
 
 	return cfg, nil
 }

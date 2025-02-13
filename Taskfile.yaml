@@ -3,7 +3,9 @@ version: '3'
 includes:
   build: ./taskfiles/build.yml
   deps: ./taskfiles/deps.yml
-  dev: ./taskfiles/dev.yml
+  dev: 
+    taskfile: ./taskfiles/dev.yml
+    flatten: true
   test: ./taskfiles/test.yml
 
 tasks:

@@ -201,7 +201,7 @@ func (w *Service) Recover() ([]*entry.Entry, error) {
 	}
 
 	for _, s := range segments {
-		segmentEntries, err := segment.ReadSegmentEntries(w.config.DataDirectory, s)
+		segmentEntries, err := segment.ReadSegmentEntries(w.config.DataDirectory, s.Name)
 		if err != nil {
 			return nil, err
 		}

@@ -1,6 +1,10 @@
 version: '3'
 
 tasks:
+  dev:
+    desc: Run application in development mode with hot reload
+    cmds:
+      - air
   lint:
     desc: Run linter on the codebase
     cmds:
@@ -15,8 +19,3 @@ tasks:
     desc: Lint protobuf files
     cmds:
       - protolint lint api/*
-
-  run:
-    desc: Run application in development mode with hot reload
-    cmds:
-      - air
