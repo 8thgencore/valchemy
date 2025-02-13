@@ -1,7 +1,6 @@
 package compute
 
 import (
-	"errors"
 	"log/slog"
 
 	"github.com/8thgencore/valchemy/internal/storage"
@@ -18,7 +17,7 @@ func NewHandler(log *slog.Logger, engine *storage.Engine) *Handler {
 	return &Handler{log: log, engine: engine}
 }
 
-// Handle handles a command
+// Handle handles a command string
 func (h *Handler) Handle(input string) (string, error) {
 	// If input is empty, do nothing
 	if input == "" {
@@ -32,6 +31,11 @@ func (h *Handler) Handle(input string) (string, error) {
 		return "", err
 	}
 
+	return h.handleCommand(cmd)
+}
+
+// handleCommand handles a parsed command (exported for testing)
+func (h *Handler) handleCommand(cmd Command) (string, error) {
 	switch cmd.Type {
 	case CommandHelp:
 		return HelpMessage, nil
@@ -45,7 +49,7 @@ func (h *Handler) Handle(input string) (string, error) {
 	case CommandGet:
 		value, ok := h.engine.Get(cmd.Args[0])
 		if !ok {
-			return "", errors.New("key not found")
+			return "", ErrKeyNotFound
 		}
 		return value, nil
 

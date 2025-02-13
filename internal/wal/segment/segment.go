@@ -28,7 +28,7 @@ func NewSegment(directory string) (*segment, error) {
 		return nil, fmt.Errorf("failed to create WAL directory: %w", err)
 	}
 
-	info := NewSegmentInfo(directory)
+	info := NewSegmentInfo()
 	filename := filepath.Join(directory, info.Name)
 
 	return &segment{

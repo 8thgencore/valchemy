@@ -21,7 +21,7 @@ func ParseSegmentName(name string) (int64, error) {
 }
 
 // NewSegmentInfo creates a new segment info with a unique ID
-func NewSegmentInfo(directory string) Info {
+func NewSegmentInfo() Info {
 	id := time.Now().UnixNano()
 	return Info{
 		ID:   id,

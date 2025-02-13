@@ -1,7 +1,6 @@
 package compute
 
 import (
-	"errors"
 	"strings"
 )
 
@@ -10,15 +9,6 @@ type Command struct {
 	Type string
 	Args []string
 }
-
-// ErrInvalidFormat is an error that occurs when the command format is invalid
-var ErrInvalidFormat = errors.New("invalid command format")
-
-// ErrUnknownCommand is an error that occurs when the command is unknown
-var ErrUnknownCommand = errors.New("unknown command")
-
-// ErrInvalidSetFormat is an error that occurs when the SET command format is invalid
-var ErrInvalidSetFormat = errors.New("invalid SET command format")
 
 // ParseCommand parses a command string into a Command struct
 func ParseCommand(input string) (Command, error) {

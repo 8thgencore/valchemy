@@ -85,22 +85,6 @@ func (e *Engine) applyEntries(entries []*entry.Entry) {
 	}
 }
 
-// applyEntry applies a single WAL entry to the in-memory state
-func (e *Engine) applyEntry(el entry.Entry) {
-	p := e.getPartition(el.Key)
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	switch el.Operation {
-	case entry.OperationSet:
-		p.data[el.Key] = el.Value
-	case entry.OperationDelete:
-		delete(p.data, el.Key)
-	case entry.OperationClear:
-		p.data = make(map[string]string)
-	}
-}
-
 // Set sets a key-value pair in the engine
 func (e *Engine) Set(key, value string) error {
 	// Prepare the entry
