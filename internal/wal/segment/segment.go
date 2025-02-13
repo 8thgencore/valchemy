@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/8thgencore/valchemy/internal/wal/entry"
 )
@@ -29,10 +28,8 @@ func NewSegment(directory string) (*segment, error) {
 		return nil, fmt.Errorf("failed to create WAL directory: %w", err)
 	}
 
-	filename := filepath.Join(
-		directory,
-		fmt.Sprintf("wal-%d.log", time.Now().UnixNano()),
-	)
+	info := NewSegmentInfo(directory)
+	filename := filepath.Join(directory, info.Name)
 
 	return &segment{
 		filename:  filename,
@@ -108,23 +105,31 @@ func (s *segment) CreateSegmentFile() error {
 	return nil
 }
 
-// ListSegments returns a sorted list of WAL segment files
-func ListSegments(directory string) ([]string, error) {
+// ListSegments returns a sorted list of WAL segment infos
+func ListSegments(directory string) ([]Info, error) {
 	files, err := os.ReadDir(directory)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read WAL directory: %w", err)
 	}
 
-	var segments []string
+	var segments []Info
 	for _, f := range files {
 		name := f.Name()
 		if !strings.Contains(name, "..") &&
 			strings.HasPrefix(name, "wal-") &&
 			strings.HasSuffix(name, ".log") {
-			segments = append(segments, name)
+			info, err := GetSegmentInfo(name)
+			if err != nil {
+				continue // Skip invalid segment names
+			}
+			segments = append(segments, info)
 		}
 	}
-	sort.Strings(segments)
+
+	// Sort segments by ID
+	sort.Slice(segments, func(i, j int) bool {
+		return segments[i].ID < segments[j].ID
+	})
 
 	return segments, nil
 }

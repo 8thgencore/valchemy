@@ -19,11 +19,12 @@ const (
 
 // Config is the configuration for the application
 type Config struct {
-	Env     Env `env:"ENV" env-default:"dev"`
-	Engine  EngineConfig
-	Network NetworkConfig
-	Logging LoggingConfig
-	WAL     WALConfig
+	Env         Env `env:"ENV" env-default:"dev"`
+	Engine      EngineConfig
+	Network     NetworkConfig
+	Logging     LoggingConfig
+	WAL         WALConfig
+	Replication ReplicationConfig
 }
 
 // EngineConfig is the configuration for the engine
@@ -53,6 +54,23 @@ type WALConfig struct {
 	MaxSegmentSize       string        `yaml:"max_segment_size" env-default:"10MB"`
 	MaxSegmentSizeBytes  uint64        `yaml:"-"` // calculated field
 	DataDirectory        string        `yaml:"data_directory" env-default:"./data/wal"`
+}
+
+// ReplicationType defines the type of replication node
+type ReplicationType string
+
+const (
+	// Master is the leader node that accepts writes
+	Master ReplicationType = "master"
+	// Slave is the follower node that replicates from master
+	Slave ReplicationType = "slave"
+)
+
+// ReplicationConfig configures the replication settings
+type ReplicationConfig struct {
+	ReplicaType   ReplicationType `yaml:"replica_type" env-default:"master"`
+	MasterAddress string          `yaml:"master_address" env-default:"127.0.0.1:3232"`
+	SyncInterval  time.Duration   `yaml:"sync_interval" env-default:"1s"`
 }
 
 // NewConfig creates a new instance of Config.

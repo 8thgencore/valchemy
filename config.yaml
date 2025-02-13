@@ -14,3 +14,7 @@ wal:
   flushing_batch_timeout: "10ms"
   max_segment_size: "10MB"
   data_directory: "./data/wal"
+replication:
+  replica_type: "master"  # can be "master" or "slave"
+  master_address: "127.0.0.1:3232"
+  sync_interval: "1s"
