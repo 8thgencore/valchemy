@@ -67,7 +67,9 @@ func (m *Manager) startMaster() error {
 
 // handleSlaveConnection handles incoming slave connections
 func (m *Manager) handleSlaveConnection(conn net.Conn) {
-	defer conn.Close()
+	if err := conn.Close(); err != nil {
+		m.log.Error("Failed to close connection", "error", err)
+	}
 
 	m.log.Info("New slave connected", "address", conn.RemoteAddr())
 
@@ -142,7 +144,11 @@ func (m *Manager) syncWithMaster() error {
 	if err != nil {
 		return fmt.Errorf("failed to connect to master: %w", err)
 	}
-	defer conn.Close()
+
+	// Close connection after use
+	if err := conn.Close(); err != nil {
+		m.log.Error("Failed to close connection", "error", err)
+	}
 
 	// Get last local segment ID
 	segments, err := segment.ListSegments(m.walDir)
@@ -179,7 +185,7 @@ func (m *Manager) syncWithMaster() error {
 		// Write segment to disk
 		segName := fmt.Sprintf("wal-%d.log", segmentID)
 		segPath := filepath.Join(m.walDir, segName)
-		if err := os.WriteFile(segPath, data, 0o644); err != nil {
+		if err := os.WriteFile(segPath, data, 0o600); err != nil {
 			return fmt.Errorf("failed to write segment file: %w", err)
 		}
 

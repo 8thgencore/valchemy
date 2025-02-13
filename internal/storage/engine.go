@@ -58,7 +58,15 @@ func (e *Engine) getPartition(key string) *partition {
 	hash := fnv.New32a()
 	hash.Write([]byte(key))
 
-	return e.partitions[hash.Sum32()%uint32(e.numShards)]
+	// Ensure numShards is within the valid range for uint32
+	if e.numShards < 0 || e.numShards > int(^uint32(0)) {
+		return nil // or handle the error as appropriate
+	}
+
+	// Use modulo operation to get the partition index
+	index := hash.Sum32() % uint32(e.numShards)
+
+	return e.partitions[index]
 }
 
 // applyEntries applies a slice of WAL entries to the in-memory state
