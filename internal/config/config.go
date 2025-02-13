@@ -44,6 +44,7 @@ type NetworkConfig struct {
 type LoggingConfig struct {
 	Level  string `yaml:"level" env-default:"info"`
 	Output string `yaml:"output" env-default:"stdout"`
+	Format string `yaml:"format" env-default:"text"`
 }
 
 // WALConfig configures the Write-Ahead Logging (WAL)
@@ -68,9 +69,12 @@ const (
 
 // ReplicationConfig configures the replication settings
 type ReplicationConfig struct {
-	ReplicaType   ReplicationType `yaml:"replica_type" env-default:"master"`
-	MasterAddress string          `yaml:"master_address" env-default:"127.0.0.1:3232"`
-	SyncInterval  time.Duration   `yaml:"sync_interval" env-default:"1s"`
+	ReplicaType     ReplicationType `yaml:"replica_type" env-default:"master"`
+	MasterHost      string          `yaml:"master_host,omitempty"`
+	ReplicationPort string          `yaml:"replication_port" env-default:"3233"`
+	SyncInterval    time.Duration   `yaml:"sync_interval" env-default:"1s"`
+	SyncRetryDelay  time.Duration   `yaml:"sync_retry_delay" env-default:"500ms"`
+	SyncRetryCount  int             `yaml:"sync_retry_count" env-default:"3"`
 }
 
 // NewConfig creates a new instance of Config.

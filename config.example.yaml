@@ -28,10 +28,9 @@ replication:
   # -------------------------------------------------------------------
   # Master node configuration (uncomment to use)
   # -------------------------------------------------------------------
-  replica_type: "master"           # Node replication role
-  master_host: "127.0.0.1"         # Master node API address
-  replication_port: "3233"         # Port for slave connections
-  replication_timeout: "30s"       # Slave connection timeout
+  # replica_type: "master"           # Node replication role
+  # replication_port: "3233"         # Port for slave connections
+  # replication_timeout: "30s"       # Slave connection timeout
 
   # -------------------------------------------------------------------
   # Slave node configuration (uncomment to use)

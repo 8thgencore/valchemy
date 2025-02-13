@@ -42,13 +42,16 @@ func (m *Manager) Start() error {
 
 // startMaster starts the master replication service
 func (m *Manager) startMaster() error {
-	// Start TCP server for slaves to connect
-	listener, err := net.Listen("tcp", m.cfg.MasterAddress)
+	// Start TCP server for slaves to connect on the replication port
+	replicationAddress := fmt.Sprintf("%s:%s", m.cfg.MasterHost, m.cfg.ReplicationPort)
+	listener, err := net.Listen("tcp", replicationAddress)
 	if err != nil {
-		return fmt.Errorf("failed to start master listener: %w", err)
+		return fmt.Errorf("failed to start master replication listener: %w", err)
 	}
 
-	m.log.Info("Started master replication service", "address", m.cfg.MasterAddress)
+	m.log.Info("Started master replication service",
+		"master_host", m.cfg.MasterHost,
+		"replication_port", m.cfg.ReplicationPort)
 
 	go func() {
 		for {
@@ -67,9 +70,11 @@ func (m *Manager) startMaster() error {
 
 // handleSlaveConnection handles incoming slave connections
 func (m *Manager) handleSlaveConnection(conn net.Conn) {
-	if err := conn.Close(); err != nil {
-		m.log.Error("Failed to close connection", "error", err)
-	}
+	defer func() {
+		if err := conn.Close(); err != nil {
+			m.log.Error("Failed to close connection", "error", err)
+		}
+	}()
 
 	m.log.Info("New slave connected", "address", conn.RemoteAddr())
 
@@ -123,7 +128,7 @@ func (m *Manager) sendSegment(conn net.Conn, segInfo segment.Info) error {
 
 // startSlave starts the slave replication service
 func (m *Manager) startSlave() error {
-	m.log.Info("Starting slave replication service", "master", m.cfg.MasterAddress)
+	m.log.Info("Starting slave replication service", "master", m.cfg.MasterHost)
 
 	go func() {
 		for {
@@ -139,16 +144,36 @@ func (m *Manager) startSlave() error {
 
 // syncWithMaster synchronizes WAL segments with the master
 func (m *Manager) syncWithMaster() error {
-	// Connect to master
-	conn, err := net.Dial("tcp", m.cfg.MasterAddress)
-	if err != nil {
-		return fmt.Errorf("failed to connect to master: %w", err)
+	// Connect to master's replication port
+	replicationAddress := fmt.Sprintf("%s:%s", m.cfg.MasterHost, m.cfg.ReplicationPort)
+
+	var conn net.Conn
+	var err error
+
+	syncRetryCount := m.cfg.SyncRetryCount
+
+	// Try connecting with retries
+	for {
+		conn, err = net.Dial("tcp", replicationAddress)
+		if err == nil {
+			break
+		}
+		m.log.Error("Failed to connect to master, retrying",
+			"error", err,
+			"retry_delay", m.cfg.SyncRetryDelay)
+		if syncRetryCount > 0 {
+			syncRetryCount--
+		} else {
+			return fmt.Errorf("failed to connect to master after %d retries: %w", syncRetryCount, err)
+		}
+		time.Sleep(m.cfg.SyncRetryDelay)
 	}
 
-	// Close connection after use
-	if err := conn.Close(); err != nil {
-		m.log.Error("Failed to close connection", "error", err)
-	}
+	defer func() {
+		if err := conn.Close(); err != nil {
+			m.log.Error("Failed to close connection", "error", err)
+		}
+	}()
 
 	// Get last local segment ID
 	segments, err := segment.ListSegments(m.walDir)
