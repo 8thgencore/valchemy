@@ -1,3 +1,5 @@
+![logo](https://github.com/user-attachments/assets/110d4506-a298-420e-8cb5-3e847a365d4d)
+
 [![Release](https://img.shields.io/github/release/8thgencore/valchemy.svg)](https://github.com/8thgencore/valchemy/releases/latest) 
 
 # Valchemy
