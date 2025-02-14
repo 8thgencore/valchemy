@@ -1,19 +1,19 @@
 # Core database engine configuration
 engine:
-  type: "in_memory"         # Storage engine type (in_memory/on_disk)
+  type: "in_memory"                  # Storage engine type (in_memory/on_disk)
 
 # Network communication settings
 network:
-  address: "127.0.0.1:3223"  # Client-facing API endpoint
-  max_connections: 100              # Maximum concurrent client connections
-  max_message_size: "4KB"           # Max allowed size per client message
-  idle_timeout: "5m"                # Connection timeout for idle clients
+  address: "127.0.0.1:3223"          # Client-facing API endpoint
+  max_connections: 100               # Maximum concurrent client connections
+  max_message_size: "4KB"            # Max allowed size per client message
+  idle_timeout: "5m"                 # Connection timeout for idle clients
 
 # Logging configuration
 logging:
-  level: "info"             # Log level (debug|info|warn|error)
-  output: "stdout"          # Output destination (stdout|file_path)
-  format: "text"            # Log format (text|json)
+  level: "info"                      # Log level (debug|info|warn|error)
+  output: "stdout"                   # Output destination (stdout|file_path)
+  format: "text"                     # Log format (text|json)
 
 # Write-Ahead Log (WAL) configuration
 wal:
@@ -29,6 +29,7 @@ replication:
   # Master node configuration (uncomment to use)
   # -------------------------------------------------------------------
   # replica_type: "master"           # Node replication role
+  # master_host: "127.0.0.1"         # Master node API host
   # replication_port: "3233"         # Port for replica connections
   # replication_timeout: "30s"       # Replica connection timeout
 
@@ -36,7 +37,7 @@ replication:
   # Replica node configuration (uncomment to use)
   # -------------------------------------------------------------------
   # replica_type: "replica"          # Node replication role
-  # master_host: "127.0.0.1"         # Master node API address
+  # master_host: "127.0.0.1"         # Master node API host
   # replication_port: "3233"         # Master's replication port
   # sync_interval: "1s"              # Replication sync interval
   # sync_retry_delay: "500ms"        # Delay between sync retries

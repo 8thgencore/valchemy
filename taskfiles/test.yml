@@ -17,6 +17,7 @@ tasks:
       - go clean -testcache
       - |
         go test ./... \
+          -tags=unit \
           -coverprofile={{.TESTS_COVERAGE_FILE}}.tmp \
           -covermode=count \
           -count={{.TESTS_ATTEMPTS}}
