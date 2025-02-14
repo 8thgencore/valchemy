@@ -1,8 +1,11 @@
 package replication
 
 import (
+	"errors"
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/8thgencore/valchemy/internal/wal/segment"
@@ -23,9 +26,11 @@ func (m *Manager) startMaster() error {
 		return fmt.Errorf("failed to start master replication listener: %w", err)
 	}
 
-	m.log.Info("Started master replication service",
+	m.log.Info(
+		"Started master replication service",
 		"master_host", m.cfg.MasterHost,
-		"replication_port", m.cfg.ReplicationPort)
+		"replication_port", m.cfg.ReplicationPort,
+	)
 
 	go func() {
 		for {
@@ -64,6 +69,7 @@ func (m *Manager) handleReplicaConnection(conn net.Conn) {
 func (m *Manager) startWALMonitor() chan struct{} {
 	changes := make(chan struct{}, 1)
 	go m.monitorWALChanges(changes)
+
 	return changes
 }
 
@@ -77,8 +83,27 @@ func (m *Manager) monitorWALChanges(changes chan struct{}) {
 			default:
 			}
 		}
+		// TODO: Make this configurable
 		time.Sleep(100 * time.Millisecond)
 	}
+}
+
+func (m *Manager) getCurrentWALSize() int64 {
+	segments, err := segment.ListSegments(m.walDir)
+	if err != nil {
+		m.log.Error("Failed to list segments", sl.Err(err))
+		return 0
+	}
+
+	if len(segments) > 0 {
+		lastSegment := segments[len(segments)-1]
+		segPath := filepath.Join(m.walDir, lastSegment.Name)
+		if info, err := os.Stat(segPath); err == nil {
+			return info.Size()
+		}
+	}
+
+	return 0
 }
 
 func (m *Manager) processReplicaSync(
@@ -98,6 +123,18 @@ func (m *Manager) processReplicaSync(
 	return m.sendUpdatedSegments(conn, lastSegmentID, lastSegmentSize)
 }
 
+func (m *Manager) readReplicaState(conn net.Conn, lastSegmentID, lastSegmentSize *int64) error {
+	if _, err := fmt.Fscanf(conn, "%d %d\n", lastSegmentID, lastSegmentSize); err != nil {
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			return nil
+		}
+		m.log.Info("Replica disconnected", "address", conn.RemoteAddr())
+		return errors.New("connection closed")
+	}
+
+	return nil
+}
+
 func (m *Manager) sendUpdatedSegments(conn net.Conn, lastSegmentID, lastSegmentSize *int64) error {
 	segments, err := segment.ListSegments(m.walDir)
 	if err != nil {
@@ -109,6 +146,48 @@ func (m *Manager) sendUpdatedSegments(conn net.Conn, lastSegmentID, lastSegmentS
 		if err := m.processSingleSegment(conn, seg, lastSegmentID, lastSegmentSize); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func (m *Manager) processSingleSegment(conn net.Conn, seg segment.Info, lastSegmentID, lastSegmentSize *int64) error {
+	segPath, err := validateSegmentPath(m.walDir, seg.Name)
+	if err != nil {
+		m.log.Error("Invalid segment path", sl.Err(err))
+		return nil
+	}
+
+	data, err := os.ReadFile(segPath) //nolint:gosec
+	if err != nil {
+		m.log.Error("Failed to read segment", sl.Err(err))
+		return nil
+	}
+
+	if seg.ID < *lastSegmentID {
+		return nil
+	}
+
+	if seg.ID == *lastSegmentID {
+		if int64(len(data)) <= *lastSegmentSize {
+			return nil
+		}
+		data = data[*lastSegmentSize:]
+
+		if err := m.sendSegment(conn, seg, data); err != nil {
+			m.log.Error("Failed to send segment update", sl.Err(err))
+			return err
+		}
+
+		*lastSegmentSize += int64(len(data))
+	} else {
+		if err := m.sendSegment(conn, seg, data); err != nil {
+			m.log.Error("Failed to send new segment", sl.Err(err))
+			return err
+		}
+
+		*lastSegmentID = seg.ID
+		*lastSegmentSize = int64(len(data))
 	}
 
 	return nil

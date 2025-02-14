@@ -76,7 +76,7 @@ func (m *Manager) syncWithMaster() error {
 	var lastSegmentID int64 = -1
 	var lastSegmentSize int64
 
-	if err := m.conn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+	if err := m.conn.SetReadDeadline(time.Now().Add(m.cfg.SyncInterval)); err != nil {
 		return fmt.Errorf("failed to set read deadline: %w", err)
 	}
 
@@ -154,78 +154,6 @@ func (m *Manager) receiveAndProcessSegments(lastSegmentID, lastSegmentSize *int6
 	return nil
 }
 
-func (m *Manager) getCurrentWALSize() int64 {
-	segments, err := segment.ListSegments(m.walDir)
-	if err != nil {
-		m.log.Error("Failed to list segments", sl.Err(err))
-		return 0
-	}
-
-	if len(segments) > 0 {
-		lastSegment := segments[len(segments)-1]
-		segPath := filepath.Join(m.walDir, lastSegment.Name)
-		if info, err := os.Stat(segPath); err == nil {
-			return info.Size()
-		}
-	}
-
-	return 0
-}
-
-func (m *Manager) readReplicaState(conn net.Conn, lastSegmentID, lastSegmentSize *int64) error {
-	if _, err := fmt.Fscanf(conn, "%d %d\n", lastSegmentID, lastSegmentSize); err != nil {
-		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-			return nil
-		}
-		m.log.Info("Replica disconnected", "address", conn.RemoteAddr())
-		return nil
-	}
-
-	return nil
-}
-
-func (m *Manager) processSingleSegment(conn net.Conn, seg segment.Info, lastSegmentID, lastSegmentSize *int64) error {
-	segPath, err := validateSegmentPath(m.walDir, seg.Name)
-	if err != nil {
-		m.log.Error("Invalid segment path", sl.Err(err))
-		return nil
-	}
-
-	data, err := os.ReadFile(segPath) //nolint:gosec
-	if err != nil {
-		m.log.Error("Failed to read segment", sl.Err(err))
-		return nil
-	}
-
-	if seg.ID < *lastSegmentID {
-		return nil
-	}
-
-	if seg.ID == *lastSegmentID {
-		if int64(len(data)) <= *lastSegmentSize {
-			return nil
-		}
-		data = data[*lastSegmentSize:]
-
-		if err := m.sendSegment(conn, seg, data); err != nil {
-			m.log.Error("Failed to send segment update", sl.Err(err))
-			return err
-		}
-
-		*lastSegmentSize += int64(len(data))
-	} else {
-		if err := m.sendSegment(conn, seg, data); err != nil {
-			m.log.Error("Failed to send new segment", sl.Err(err))
-			return err
-		}
-
-		*lastSegmentID = seg.ID
-		*lastSegmentSize = int64(len(data))
-	}
-
-	return nil
-}
-
 func (m *Manager) readSegmentHeader() (int64, int64, error) {
 	var segmentID, size int64
 	if _, err := fmt.Fscanf(m.conn, "%d %d\n", &segmentID, &size); err != nil {
@@ -285,12 +213,24 @@ func (m *Manager) processReceivedSegment(segmentID, size int64, lastSegmentID, l
 }
 
 func validateSegmentPath(walDir, segName string) (string, error) {
+	// Check if the segment name is valid
 	if !strings.HasPrefix(segName, "wal-") || !strings.HasSuffix(segName, ".log") {
 		return "", fmt.Errorf("invalid segment name format: %s", segName)
 	}
 
+	// Clean and normalize paths
+	walDir = filepath.Clean(walDir)
 	fullPath := filepath.Join(walDir, segName)
-	if !strings.HasPrefix(fullPath, walDir) {
+	fullPath = filepath.Clean(fullPath)
+
+	// Check if the path is within the walDir
+	relPath, err := filepath.Rel(walDir, fullPath)
+	if err != nil {
+		return "", fmt.Errorf("invalid path relationship: %w", err)
+	}
+
+	// Check if the path contains ".."
+	if strings.Contains(relPath, "..") {
 		return "", errors.New("path traversal detected")
 	}
 
