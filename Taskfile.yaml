@@ -10,5 +10,6 @@ includes:
 
 tasks:
   default:
+    desc: Show task list
     cmds:
       - task --list
