@@ -68,6 +68,7 @@ func (e *Engine) getPartition(key string) *partition {
 	}
 
 	index := hash.Sum32() % uint32(e.numShards)
+
 	return e.partitions[index]
 }
 

@@ -47,6 +47,8 @@ linters-settings:
       - shadow
   dupl:
     threshold: 100
+  gocognit:
+    min-complexity: 30
   goconst:
     min-len:         2
     min-occurrences: 2

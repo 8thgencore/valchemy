@@ -18,7 +18,11 @@ func safeReadSegment(walDir, segName string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			fmt.Printf("failed to close file: %s", err)
+		}
+	}()
 
 	// Get file info for size
 	info, err := file.Stat()

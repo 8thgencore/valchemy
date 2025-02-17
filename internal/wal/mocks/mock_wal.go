@@ -1,6 +1,8 @@
 package mocks
 
 import (
+	"sync"
+
 	"github.com/8thgencore/valchemy/internal/wal"
 	"github.com/8thgencore/valchemy/internal/wal/entry"
 )
@@ -11,6 +13,7 @@ type MockWAL struct {
 	WriteError error
 	CloseError error
 	RecoverErr error
+	mu         sync.Mutex
 }
 
 func NewMockWAL() *MockWAL {
@@ -19,11 +22,13 @@ func NewMockWAL() *MockWAL {
 	}
 }
 
-func (m *MockWAL) Write(entry entry.Entry) error {
+func (m *MockWAL) Write(e entry.Entry) error {
 	if m.WriteError != nil {
 		return m.WriteError
 	}
-	m.Entries = append(m.Entries, &entry)
+	m.mu.Lock()
+	m.Entries = append(m.Entries, &e)
+	m.mu.Unlock()
 	return nil
 }
 
@@ -35,5 +40,8 @@ func (m *MockWAL) Recover() ([]*entry.Entry, error) {
 	if m.RecoverErr != nil {
 		return nil, m.RecoverErr
 	}
-	return m.Entries, nil
+	m.mu.Lock()
+	entries := m.Entries
+	m.mu.Unlock()
+	return entries, nil
 }

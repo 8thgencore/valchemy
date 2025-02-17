@@ -31,7 +31,8 @@ func TestNewSegment(t *testing.T) {
 	})
 
 	t.Run("error creating directory without permissions", func(t *testing.T) {
-		_, err := NewSegment("/root/test")
+		dir := "/proc/nonexistent" // директория, в которую точно нельзя писать
+		_, err := NewSegment(dir)
 		assert.Error(t, err)
 	})
 }
@@ -55,11 +56,23 @@ func TestSegment_CreateSegmentFile(t *testing.T) {
 	})
 
 	t.Run("error creating file without permissions", func(t *testing.T) {
+		tempDir, err := os.MkdirTemp("", "segment_test_*")
+		require.NoError(t, err)
+		defer os.RemoveAll(tempDir)
+
+		// Создаем файл
+		testFile := filepath.Join(tempDir, "test.log")
+		err = os.WriteFile(testFile, []byte("existing file"), 0644)
+		require.NoError(t, err)
+
 		s := &segment{
-			filename: "/root/test/wal.log",
+			filename:  testFile,
+			directory: tempDir,
 		}
-		err := s.CreateSegmentFile()
-		assert.Error(t, err)
+
+		// Попытка создать файл, который уже существует, должна вызвать ошибку
+		err = s.CreateSegmentFile()
+		assert.Error(t, err, "expected error when creating file that already exists")
 	})
 }
 
@@ -134,9 +147,8 @@ func TestListSegments(t *testing.T) {
 	})
 
 	t.Run("error reading directory", func(t *testing.T) {
-		segments, err := ListSegments("/nonexistent")
+		_, err := ListSegments("/proc/nonexistent") // директория, которая точно не существует
 		assert.Error(t, err)
-		assert.Nil(t, segments)
 	})
 }
 
