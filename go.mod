@@ -1,9 +1,9 @@
 module github.com/8thgencore/valchemy
 
-go 1.23.4
+go 1.24.0
 
 require (
-	github.com/alecthomas/kong v1.7.0
+	github.com/alecthomas/kong v1.8.1
 	github.com/golang-cz/devslog v0.0.11
 	github.com/ilyakaznacheev/cleanenv v1.5.0
 	github.com/stretchr/testify v1.10.0

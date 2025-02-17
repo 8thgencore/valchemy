@@ -15,41 +15,55 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestValidateSegmentPath(t *testing.T) {
+func TestSafeReadSegment(t *testing.T) {
 	tests := []struct {
 		name        string
 		walDir      string
 		segName     string
+		content     string
 		expectError bool
 	}{
 		{
 			name:        "Valid segment name",
-			walDir:      "/tmp/wal",
+			walDir:      t.TempDir(),
 			segName:     "wal-123.log",
+			content:     "test content",
 			expectError: false,
 		},
 		{
 			name:        "Invalid segment name format",
-			walDir:      "/tmp/wal",
+			walDir:      t.TempDir(),
 			segName:     "invalid.log",
+			content:     "",
 			expectError: true,
 		},
 		{
 			name:        "Path traversal attempt",
-			walDir:      "/tmp/wal",
+			walDir:      t.TempDir(),
 			segName:     "../wal-123.log",
+			content:     "",
 			expectError: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			path, err := validateSegmentPath(tt.walDir, tt.segName)
+			if !tt.expectError {
+				err := os.MkdirAll(tt.walDir, 0o755)
+				require.NoError(t, err)
+
+				fullPath := filepath.Join(tt.walDir, tt.segName)
+				err = os.WriteFile(fullPath, []byte(tt.content), 0o600)
+				require.NoError(t, err)
+			}
+
+			data, err := safeReadSegment(tt.walDir, tt.segName)
 			if tt.expectError {
 				assert.Error(t, err)
+				assert.Nil(t, data)
 			} else {
 				assert.NoError(t, err)
-				assert.Contains(t, path, tt.segName)
+				assert.Equal(t, tt.content, string(data))
 			}
 		})
 	}

@@ -94,7 +94,7 @@ func (s *segment) Size() uint64 {
 // CreateSegmentFile creates a new segment file if it doesn't exist
 func (s *segment) CreateSegmentFile() error {
 	if s.file == nil {
-		file, err := os.OpenFile(s.filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+		file, err := os.OpenFile(s.filename, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o600)
 		if err != nil {
 			return fmt.Errorf("failed to create segment file: %w", err)
 		}

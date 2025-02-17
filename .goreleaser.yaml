@@ -1,0 +1,22 @@
+builds:
+  - id: "cli"
+    main: ./cmd/cli
+    binary: cli
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+  - id: "server"
+    main: ./cmd/server
+    binary: server
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
