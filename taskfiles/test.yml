@@ -9,7 +9,7 @@ tasks:
     desc: Run all tests
     cmds:
       - go clean -testcache
-      - go test ./... -v -count {{.TESTS_ATTEMPTS}}
+      - go test ./... -tags=unit -v -count {{.TESTS_ATTEMPTS}}
 
   coverage:
     desc: Run tests with coverage report

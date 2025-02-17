@@ -152,13 +152,8 @@ func (m *Manager) sendUpdatedSegments(conn net.Conn, lastSegmentID, lastSegmentS
 }
 
 func (m *Manager) processSingleSegment(conn net.Conn, seg segment.Info, lastSegmentID, lastSegmentSize *int64) error {
-	segPath, err := validateSegmentPath(m.walDir, seg.Name)
-	if err != nil {
-		m.log.Error("Invalid segment path", sl.Err(err))
-		return nil
-	}
-
-	data, err := os.ReadFile(segPath) //nolint:gosec
+	// Safe read segment
+	data, err := safeReadSegment(m.walDir, seg.Name)
 	if err != nil {
 		m.log.Error("Failed to read segment", sl.Err(err))
 		return nil

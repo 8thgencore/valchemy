@@ -55,18 +55,19 @@ func NewEngine(log *slog.Logger, w wal.WAL) *Engine {
 
 // getPartition returns the partition for a given key
 func (e *Engine) getPartition(key string) *partition {
-	// Simple hash function to determine partition
 	hash := fnv.New32a()
-	hash.Write([]byte(key))
+	// Handle error if hash write fails
+	if _, err := hash.Write([]byte(key)); err != nil {
+		// Return first partition as fallback
+		return e.partitions[0]
+	}
 
 	// Ensure numShards is within the valid range for uint32
 	if e.numShards < 0 || e.numShards > int(^uint32(0)) {
-		return nil // or handle the error as appropriate
+		return e.partitions[0]
 	}
 
-	// Use modulo operation to get the partition index
 	index := hash.Sum32() % uint32(e.numShards)
-
 	return e.partitions[index]
 }
 

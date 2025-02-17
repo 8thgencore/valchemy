@@ -7,7 +7,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/8thgencore/valchemy/internal/wal/segment"
@@ -172,10 +171,6 @@ func (m *Manager) readSegmentHeader() (int64, int64, error) {
 
 func (m *Manager) processReceivedSegment(segmentID, size int64, lastSegmentID, lastSegmentSize *int64) error {
 	segName := fmt.Sprintf("wal-%d.log", segmentID)
-	segPath, err := validateSegmentPath(m.walDir, segName)
-	if err != nil {
-		return fmt.Errorf("invalid segment path: %w", err)
-	}
 
 	// Read segment data
 	data := make([]byte, size)
@@ -184,8 +179,8 @@ func (m *Manager) processReceivedSegment(segmentID, size int64, lastSegmentID, l
 	}
 
 	if segmentID == *lastSegmentID {
-		// For an existing segment, add new data
-		existingData, err := os.ReadFile(segPath) //nolint:gosec
+		// Safe reading of existing file
+		existingData, err := safeReadSegment(m.walDir, segName)
 		if err == nil {
 			// Combine existing data with new data
 			combinedData := make([]byte, len(existingData)+len(data))
@@ -195,8 +190,10 @@ func (m *Manager) processReceivedSegment(segmentID, size int64, lastSegmentID, l
 		}
 	}
 
+	fullPath := filepath.Join(m.walDir, segName)
+
 	// Write data to disk
-	if err := os.WriteFile(segPath, data, 0o600); err != nil {
+	if err := os.WriteFile(fullPath, data, 0o600); err != nil {
 		return fmt.Errorf("failed to write segment file: %w", err)
 	}
 
@@ -210,29 +207,4 @@ func (m *Manager) processReceivedSegment(segmentID, size int64, lastSegmentID, l
 	*lastSegmentSize = int64(len(data))
 
 	return nil
-}
-
-func validateSegmentPath(walDir, segName string) (string, error) {
-	// Check if the segment name is valid
-	if !strings.HasPrefix(segName, "wal-") || !strings.HasSuffix(segName, ".log") {
-		return "", fmt.Errorf("invalid segment name format: %s", segName)
-	}
-
-	// Clean and normalize paths
-	walDir = filepath.Clean(walDir)
-	fullPath := filepath.Join(walDir, segName)
-	fullPath = filepath.Clean(fullPath)
-
-	// Check if the path is within the walDir
-	relPath, err := filepath.Rel(walDir, fullPath)
-	if err != nil {
-		return "", fmt.Errorf("invalid path relationship: %w", err)
-	}
-
-	// Check if the path contains ".."
-	if strings.Contains(relPath, "..") {
-		return "", errors.New("path traversal detected")
-	}
-
-	return fullPath, nil
 }

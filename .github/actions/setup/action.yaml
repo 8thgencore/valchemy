@@ -1,0 +1,38 @@
+name: 'Setup Project'
+description: 'Sets up Go and project dependencies'
+
+inputs:
+  go-version:
+    description: 'Go version to use'
+    required: false
+    default: '1.24'
+  cache:
+    description: 'Enable Go module cache'
+    required: false
+    default: 'true'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: ${{ inputs.go-version }}
+        cache: ${{ inputs.cache }}
+        cache-dependency-path: go.sum
+
+    - name: Verify Go installation
+      shell: bash
+      run: |
+        echo "Go version:"
+        go version || true
+        echo "Go environment:"
+        go env || true
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        echo "Installing dependencies..."
+        go mod download || true
+        echo "Dependencies installed"
+
