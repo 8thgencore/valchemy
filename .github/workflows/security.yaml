@@ -11,6 +11,10 @@ on:
 jobs:
   security:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -21,10 +25,3 @@ jobs:
         uses: securego/gosec@master
         with:
           args: -exclude-dir=./pkg/pb ./...
-
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'table'

@@ -390,7 +390,7 @@ func TestRecover_Errors(t *testing.T) {
 		require.NoError(t, err)
 
 		// Создаем файл вместо директории
-		err = os.WriteFile(tw.cfg.DataDirectory, []byte("not a directory"), 0644)
+		err = os.WriteFile(tw.cfg.DataDirectory, []byte("not a directory"), 0o644)
 		require.NoError(t, err)
 
 		entries, err := tw.wal.Recover()

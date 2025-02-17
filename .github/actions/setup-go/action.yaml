@@ -1,4 +1,4 @@
-name: 'Setup Project'
+name: 'Setup Go'
 description: 'Sets up Go and project dependencies'
 
 inputs:

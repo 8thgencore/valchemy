@@ -62,7 +62,7 @@ func TestSegment_CreateSegmentFile(t *testing.T) {
 
 		// Создаем файл
 		testFile := filepath.Join(tempDir, "test.log")
-		err = os.WriteFile(testFile, []byte("existing file"), 0644)
+		err = os.WriteFile(testFile, []byte("existing file"), 0o644)
 		require.NoError(t, err)
 
 		s := &segment{
