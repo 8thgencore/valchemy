@@ -28,7 +28,7 @@ jobs:
         run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           file: ./coverage.txt
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -51,8 +51,8 @@ jobs:
           go-version: ${{ matrix.go-version }}
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v4
+        uses: golangci/golangci-lint-action@v8
         with:
           version: latest
-          args: --timeout=5m --out-format=colored-line-number
+          args: --output.text.colors=true --output.text.print-linter-name=true --output.text.print-issued-lines=true
           only-new-issues: true

@@ -1,16 +1,16 @@
 module github.com/8thgencore/valchemy
 
-go 1.24.0
+go 1.24.5
 
 require (
-	github.com/alecthomas/kong v1.8.1
-	github.com/golang-cz/devslog v0.0.11
+	github.com/alecthomas/kong v1.12.0
+	github.com/golang-cz/devslog v0.0.15
 	github.com/ilyakaznacheev/cleanenv v1.5.0
 	github.com/stretchr/testify v1.10.0
 )
 
 require (
-	github.com/BurntSushi/toml v1.4.0 // indirect
+	github.com/BurntSushi/toml v1.5.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
