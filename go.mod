@@ -1,6 +1,6 @@
 module github.com/8thgencore/valchemy
 
-go 1.24.2
+go 1.24.5
 
 require (
 	github.com/alecthomas/kong v1.12.0
