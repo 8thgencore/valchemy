@@ -40,7 +40,7 @@ func (m *Manager) maintainMasterConnection() error {
 		m.conn = nil
 	}
 
-	replicationAddress := fmt.Sprintf("%s:%s", m.cfg.MasterHost, m.cfg.ReplicationPort)
+	replicationAddress := net.JoinHostPort(m.cfg.MasterHost, m.cfg.ReplicationPort)
 
 	var err error
 	retryCount := m.cfg.SyncRetryCount
