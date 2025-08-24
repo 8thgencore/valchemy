@@ -3,10 +3,10 @@ module github.com/8thgencore/valchemy
 go 1.24.5
 
 require (
-	github.com/alecthomas/kong v1.12.0
+	github.com/alecthomas/kong v1.12.1
 	github.com/golang-cz/devslog v0.0.15
 	github.com/ilyakaznacheev/cleanenv v1.5.0
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.0
 )
 
 require (
