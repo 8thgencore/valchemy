@@ -124,7 +124,7 @@ func TestListSegments(t *testing.T) {
 		defer os.RemoveAll(dir)
 
 		// Create several segments
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			s, err := NewSegment(dir)
 			require.NoError(t, err)
 			err = s.CreateSegmentFile()

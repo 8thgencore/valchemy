@@ -34,8 +34,8 @@ func parseSize(sizeStr string) (uint64, error) {
 	found := false
 
 	for _, s := range suffixes {
-		if strings.HasSuffix(sizeStr, s.suffix) {
-			numStr = strings.TrimSuffix(sizeStr, s.suffix)
+		if before, ok := strings.CutSuffix(sizeStr, s.suffix); ok {
+			numStr = before
 			mult = s.mult
 			found = true
 			break
