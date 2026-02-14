@@ -207,7 +207,7 @@ func TestWrite(t *testing.T) {
 		numWrites := 20
 
 		wg.Add(numWrites)
-		for i := 0; i < numWrites; i++ {
+		for i := range numWrites {
 			go func(i int) {
 				defer wg.Done()
 				err := tw.wal.Write(entry.Entry{
@@ -446,7 +446,7 @@ func TestSegmentRotation(t *testing.T) {
 		numEntries := 5
 		written := make(map[string]bool)
 
-		for i := 0; i < numEntries; i++ {
+		for i := range numEntries {
 			key := string(rune(i))
 			err := w.Write(entry.Entry{
 				Operation: entry.OperationSet,

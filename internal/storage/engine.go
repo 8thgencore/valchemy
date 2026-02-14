@@ -33,7 +33,7 @@ func NewEngine(log *slog.Logger, w wal.WAL) *Engine {
 	}
 
 	// Initialize partitions
-	for i := 0; i < defaultNumShards; i++ {
+	for i := range defaultNumShards {
 		e.partitions[i] = &partition{
 			data: make(map[string]string),
 		}

@@ -121,7 +121,7 @@ func TestEngine(t *testing.T) {
 		const iterations = 100
 
 		go func() {
-			for i := 0; i < iterations; i++ {
+			for i := range iterations {
 				_ = engine.Set(fmt.Sprintf("key%d", i), "value")
 				engine.Get(fmt.Sprintf("key%d", i))
 			}
@@ -129,7 +129,7 @@ func TestEngine(t *testing.T) {
 		}()
 
 		go func() {
-			for i := 0; i < iterations; i++ {
+			for i := range iterations {
 				engine.Get(fmt.Sprintf("key%d", i))
 				_ = engine.Delete(fmt.Sprintf("key%d", i))
 			}
@@ -150,7 +150,7 @@ func TestEngine(t *testing.T) {
 
 		go func() {
 			defer wg.Done()
-			for i := 0; i < iterations; i++ {
+			for i := range iterations {
 				err := engine.Set("key", fmt.Sprintf("value1_%d", i))
 				require.NoError(t, err)
 			}
@@ -158,7 +158,7 @@ func TestEngine(t *testing.T) {
 
 		go func() {
 			defer wg.Done()
-			for i := 0; i < iterations; i++ {
+			for i := range iterations {
 				err := engine.Set("key", fmt.Sprintf("value2_%d", i))
 				require.NoError(t, err)
 			}
