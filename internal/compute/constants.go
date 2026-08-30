@@ -1,6 +1,6 @@
 package compute
 
-// Command types
+// Command types.
 const (
 	CommandSet   = "SET"
 	CommandGet   = "GET"
@@ -9,12 +9,12 @@ const (
 	CommandClear = "CLEAR"
 )
 
-// Response messages
+// Response messages.
 const (
 	ResponseOK = "OK"
 )
 
-// Help messages
+// Help messages.
 const (
 	HelpMessage = "Available commands:\n" +
 		"  SET <key> <value>  - Set the value of a key\n" +

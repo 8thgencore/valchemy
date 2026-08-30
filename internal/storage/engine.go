@@ -10,7 +10,7 @@ import (
 	"github.com/8thgencore/valchemy/pkg/logger/sl"
 )
 
-// Engine is a struct that represents the storage engine
+// Engine is a struct that represents the storage engine.
 type Engine struct {
 	partitions []*partition
 	wal        wal.WAL
@@ -24,7 +24,7 @@ type partition struct {
 
 const defaultNumShards = 16
 
-// NewEngine creates a new Engine
+// NewEngine creates a new Engine.
 func NewEngine(log *slog.Logger, w wal.WAL) *Engine {
 	e := &Engine{
 		partitions: make([]*partition, defaultNumShards),
@@ -53,7 +53,97 @@ func NewEngine(log *slog.Logger, w wal.WAL) *Engine {
 	return e
 }
 
-// getPartition returns the partition for a given key
+// Set sets a key-value pair in the engine.
+func (e *Engine) Set(key, value string) error {
+	// Prepare the entry
+	entry := entry.Entry{
+		Operation: entry.OperationSet,
+		Key:       key,
+		Value:     value,
+	}
+
+	// Write to WAL first
+	if e.wal != nil {
+		err := e.wal.Write(entry)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Get the appropriate partition
+	p := e.getPartition(key)
+
+	// Apply the change to in-memory state
+	p.mu.Lock()
+	p.data[key] = value
+	p.mu.Unlock()
+
+	return nil
+}
+
+// Get gets a value from the engine.
+func (e *Engine) Get(key string) (string, bool) {
+	p := e.getPartition(key)
+	p.mu.RLock()
+	value, exists := p.data[key]
+	p.mu.RUnlock()
+
+	return value, exists
+}
+
+// Delete deletes a key from the engine.
+func (e *Engine) Delete(key string) error {
+	// Prepare the entry
+	entry := entry.Entry{
+		Operation: entry.OperationDelete,
+		Key:       key,
+	}
+
+	// Write to WAL first
+	if e.wal != nil {
+		err := e.wal.Write(entry)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Get the appropriate partition
+	p := e.getPartition(key)
+
+	// Apply the change to in-memory state
+	p.mu.Lock()
+	delete(p.data, key)
+	p.mu.Unlock()
+
+	return nil
+}
+
+// Clear removes all keys from the engine.
+func (e *Engine) Clear() error {
+	// Prepare the entry
+	entry := entry.Entry{
+		Operation: entry.OperationClear,
+	}
+
+	// Write to WAL first
+	if e.wal != nil {
+		err := e.wal.Write(entry)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Clear all partitions
+	for _, p := range e.partitions {
+		p.mu.Lock()
+		p.data = make(map[string]string)
+		p.mu.Unlock()
+	}
+
+	return nil
+}
+
+// getPartition returns the partition for a given key.
 func (e *Engine) getPartition(key string) *partition {
 	hash := fnv.New32a()
 	// Handle error if hash write fails
@@ -72,7 +162,7 @@ func (e *Engine) getPartition(key string) *partition {
 	return e.partitions[index]
 }
 
-// applyEntries applies a slice of WAL entries to the in-memory state
+// applyEntries applies a slice of WAL entries to the in-memory state.
 func (e *Engine) applyEntries(entries []*entry.Entry) {
 	for _, el := range entries {
 		switch el.Operation {
@@ -92,92 +182,7 @@ func (e *Engine) applyEntries(entries []*entry.Entry) {
 				p.data = make(map[string]string)
 				p.mu.Unlock()
 			}
+		default:
 		}
 	}
-}
-
-// Set sets a key-value pair in the engine
-func (e *Engine) Set(key, value string) error {
-	// Prepare the entry
-	entry := entry.Entry{
-		Operation: entry.OperationSet,
-		Key:       key,
-		Value:     value,
-	}
-
-	// Write to WAL first
-	if e.wal != nil {
-		if err := e.wal.Write(entry); err != nil {
-			return err
-		}
-	}
-
-	// Get the appropriate partition
-	p := e.getPartition(key)
-
-	// Apply the change to in-memory state
-	p.mu.Lock()
-	p.data[key] = value
-	p.mu.Unlock()
-
-	return nil
-}
-
-// Get gets a value from the engine
-func (e *Engine) Get(key string) (string, bool) {
-	p := e.getPartition(key)
-	p.mu.RLock()
-	value, exists := p.data[key]
-	p.mu.RUnlock()
-	return value, exists
-}
-
-// Delete deletes a key from the engine
-func (e *Engine) Delete(key string) error {
-	// Prepare the entry
-	entry := entry.Entry{
-		Operation: entry.OperationDelete,
-		Key:       key,
-	}
-
-	// Write to WAL first
-	if e.wal != nil {
-		if err := e.wal.Write(entry); err != nil {
-			return err
-		}
-	}
-
-	// Get the appropriate partition
-	p := e.getPartition(key)
-
-	// Apply the change to in-memory state
-	p.mu.Lock()
-	delete(p.data, key)
-	p.mu.Unlock()
-
-	return nil
-}
-
-// Clear removes all keys from the engine
-func (e *Engine) Clear() error {
-	// Prepare the entry
-	entry := entry.Entry{
-		Operation: entry.OperationClear,
-	}
-
-	// Write to WAL first
-	if e.wal != nil {
-		if err := e.wal.Write(entry); err != nil {
-			return err
-		}
-	}
-
-	// Clear all partitions
-	for _, p := range e.partitions {
-		p.mu.Lock()
-		p.data = make(map[string]string)
-		p.mu.Unlock()
-	}
-
-	return nil
 }

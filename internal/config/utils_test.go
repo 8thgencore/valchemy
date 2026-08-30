@@ -46,8 +46,10 @@ func TestParseSize(t *testing.T) {
 		got, err := parseSize(tt.input)
 		if (err != nil) != tt.wantErr {
 			t.Errorf("parseSize(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+
 			continue
 		}
+
 		if !tt.wantErr && got != tt.expected {
 			t.Errorf("parseSize(%q) = %v, want %v", tt.input, got, tt.expected)
 		}

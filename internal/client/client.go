@@ -3,7 +3,10 @@ package client
 import (
 	"bufio"
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"strings"
@@ -11,48 +14,70 @@ import (
 	"github.com/8thgencore/valchemy/pkg/constants"
 )
 
-// Client represents a client for connecting to the server
+// Client represents a client for connecting to the server.
 type Client struct {
 	address string
 	conn    net.Conn
 }
 
-// New creates a new instance of the client
+// New creates a new instance of the client.
 func New(address string) *Client {
 	return &Client{
 		address: address,
 	}
 }
 
-// Connect establishes a connection to the server
+// Connect establishes a connection to the server.
 func (c *Client) Connect() error {
-	conn, err := net.Dial("tcp", c.address)
+	var dialer net.Dialer
+
+	conn, err := dialer.DialContext(context.Background(), "tcp", c.address)
 	if err != nil {
 		return fmt.Errorf("failed to connect to server: %w", err)
 	}
+
 	c.conn = conn
 
 	return nil
 }
 
-// Run starts the interactive client mode
+// Run starts the interactive client mode.
 func (c *Client) Run() error {
 	defer func() {
 		if c.conn != nil {
-			_ = c.conn.Close()
+			if err := c.conn.Close(); err != nil {
+				fmt.Fprintf(os.Stderr, "failed to close connection: %v\n", err)
+			}
 		}
 	}()
 
 	reader := bufio.NewReader(os.Stdin)
-	fmt.Println("Connected to Valchemy server. Type 'help' or '?' for available commands.")
+
+	if _, err := fmt.Fprintln(os.Stdout, "Connected to Valchemy server. Type 'help' or '?' for available commands."); err != nil {
+		return fmt.Errorf("failed to write to stdout: %w", err)
+	}
 
 	for {
-		fmt.Print("> ")
-		input, _ := reader.ReadString('\n')
+		if _, err := fmt.Fprint(os.Stdout, "> "); err != nil {
+			return fmt.Errorf("failed to write to stdout: %w", err)
+		}
+
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+
+			return fmt.Errorf("failed to read input: %w", err)
+		}
+
 		input = strings.TrimSpace(input)
 
 		if input == "exit" {
-			fmt.Println("Goodbye!")
+			if _, err := fmt.Fprintln(os.Stdout, "Goodbye!"); err != nil {
+				return fmt.Errorf("failed to write to stdout: %w", err)
+			}
+
 			return nil
 		}
 
@@ -62,7 +87,7 @@ func (c *Client) Run() error {
 	}
 }
 
-// sendCommand sends a command to the server and receives a response
+// sendCommand sends a command to the server and receives a response.
 func (c *Client) sendCommand(command string) error {
 	// Send command to server
 	if _, err := fmt.Fprintf(c.conn, "%s\n", command); err != nil {
@@ -71,7 +96,9 @@ func (c *Client) sendCommand(command string) error {
 
 	// Read the full response until the end marker
 	var response strings.Builder
+
 	buffer := make([]byte, 1024)
+
 	for {
 		n, err := c.conn.Read(buffer)
 		if err != nil {
@@ -79,6 +106,7 @@ func (c *Client) sendCommand(command string) error {
 		}
 
 		response.Write(buffer[:n])
+
 		if bytes.Contains(buffer[:n], []byte{0}) {
 			break
 		}
@@ -86,7 +114,9 @@ func (c *Client) sendCommand(command string) error {
 
 	// Remove the end marker and print the response
 	responseStr := strings.TrimSuffix(response.String(), constants.EndMarker)
-	fmt.Print(responseStr)
+	if _, err := fmt.Fprint(os.Stdout, responseStr); err != nil {
+		return fmt.Errorf("failed to write response: %w", err)
+	}
 
 	return nil
 }

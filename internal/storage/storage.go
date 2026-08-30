@@ -1,6 +1,6 @@
 package storage
 
-// Storage is an interface that defines the storage operations
+// Storage is an interface that defines the storage operations.
 type Storage interface {
 	// Set sets a key-value pair in the storage
 	Set(key, value string) error

@@ -2,7 +2,7 @@ package mocks
 
 import "github.com/8thgencore/valchemy/internal/wal/entry"
 
-// MockSegment is a test helper that implements segment.Segment interface
+// MockSegment is a test helper that implements segment.Segment interface.
 type MockSegment struct {
 	WriteErr         error
 	SyncErr          error
@@ -11,7 +11,7 @@ type MockSegment struct {
 	Size_            uint64
 }
 
-func (m *MockSegment) Write(e entry.Entry) error {
+func (m *MockSegment) Write(_ entry.Entry) error {
 	return m.WriteErr
 }
 

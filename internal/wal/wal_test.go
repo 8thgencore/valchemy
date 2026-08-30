@@ -8,14 +8,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/8thgencore/valchemy/internal/config"
 	"github.com/8thgencore/valchemy/internal/wal/entry"
 	"github.com/8thgencore/valchemy/internal/wal/segment/mocks"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
-// testWAL represents test helper struct
+const (
+	testKey1   = "key1"
+	testValue1 = "value1"
+)
+
+// testWAL represents test helper struct.
 type testWAL struct {
 	wal *Service
 	cfg config.WALConfig
@@ -24,11 +30,11 @@ type testWAL struct {
 	cleanup func()
 }
 
-// setupWAL creates a new WAL instance with temporary directory for testing
+// setupWAL creates a new WAL instance with temporary directory for testing.
 func setupWAL(t *testing.T) *testWAL {
 	t.Helper()
-	tempDir, err := os.MkdirTemp("", "wal_test_*")
-	require.NoError(t, err)
+
+	tempDir := t.TempDir()
 
 	cfg := config.WALConfig{
 		Enabled:              true,
@@ -43,9 +49,10 @@ func setupWAL(t *testing.T) *testWAL {
 
 	cleanup := func() {
 		if w != nil {
-			w.Close()
+			if err := w.Close(); err != nil {
+				t.Logf("failed to close WAL: %v", err)
+			}
 		}
-		os.RemoveAll(tempDir)
 	}
 
 	return &testWAL{
@@ -68,7 +75,7 @@ func TestNew(t *testing.T) {
 		cfg := config.WALConfig{Enabled: false}
 		w, err := New(cfg)
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Nil(t, w)
 	})
 
@@ -79,7 +86,7 @@ func TestNew(t *testing.T) {
 		}
 		w, err := New(cfg)
 
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Nil(t, w)
 	})
 }
@@ -96,8 +103,8 @@ func TestWrite(t *testing.T) {
 			MaxSegmentSizeBytes:  1024,
 		}
 
-		tempDir, err := os.MkdirTemp("", "wal_test_*")
-		require.NoError(t, err)
+		tempDir := t.TempDir()
+
 		cfg.DataDirectory = tempDir
 
 		w, err := New(cfg)
@@ -105,17 +112,18 @@ func TestWrite(t *testing.T) {
 
 		cleanup := func() {
 			if w != nil {
-				w.Close()
+				if err := w.Close(); err != nil {
+					t.Logf("failed to close WAL: %v", err)
+				}
 			}
-			os.RemoveAll(tempDir)
 		}
 		defer cleanup()
 
 		// Write first entry
 		err = w.Write(entry.Entry{
 			Operation: entry.OperationSet,
-			Key:       "key1",
-			Value:     "value1",
+			Key:       testKey1,
+			Value:     testValue1,
 		})
 		require.NoError(t, err)
 
@@ -138,8 +146,8 @@ func TestWrite(t *testing.T) {
 		entries, err := w.Recover()
 		require.NoError(t, err)
 		require.Len(t, entries, 2)
-		assert.Equal(t, "key1", entries[0].Key)
-		assert.Equal(t, "value1", entries[0].Value)
+		assert.Equal(t, testKey1, entries[0].Key)
+		assert.Equal(t, testValue1, entries[0].Value)
 		assert.Equal(t, "key2", entries[1].Key)
 		assert.Equal(t, "value2", entries[1].Value)
 	})
@@ -156,8 +164,8 @@ func TestWrite(t *testing.T) {
 			MaxSegmentSizeBytes:  1024,
 		}
 
-		tempDir, err := os.MkdirTemp("", "wal_test_*")
-		require.NoError(t, err)
+		tempDir := t.TempDir()
+
 		cfg.DataDirectory = tempDir
 
 		w, err := New(cfg)
@@ -165,17 +173,18 @@ func TestWrite(t *testing.T) {
 
 		cleanup := func() {
 			if w != nil {
-				w.Close()
+				if err := w.Close(); err != nil {
+					t.Logf("failed to close WAL: %v", err)
+				}
 			}
-			os.RemoveAll(tempDir)
 		}
 		defer cleanup()
 
 		// Write one entry
 		err = w.Write(entry.Entry{
 			Operation: entry.OperationSet,
-			Key:       "key1",
-			Value:     "value1",
+			Key:       testKey1,
+			Value:     testValue1,
 		})
 		require.NoError(t, err)
 
@@ -194,40 +203,51 @@ func TestWrite(t *testing.T) {
 		entries, err := w.Recover()
 		require.NoError(t, err)
 		require.Len(t, entries, 1)
-		assert.Equal(t, "key1", entries[0].Key)
-		assert.Equal(t, "value1", entries[0].Value)
+		assert.Equal(t, testKey1, entries[0].Key)
+		assert.Equal(t, testValue1, entries[0].Value)
 	})
 
 	t.Run("concurrent writes", func(t *testing.T) {
 		t.Parallel()
 		tw := setupWAL(t)
+
 		defer tw.cleanup()
 
 		var wg sync.WaitGroup
+
 		numWrites := 20
 
 		wg.Add(numWrites)
+
 		for i := range numWrites {
 			go func(i int) {
 				defer wg.Done()
+
 				err := tw.wal.Write(entry.Entry{
 					Operation: entry.OperationSet,
-					Key:       string(rune(i)),
-					Value:     "value",
+					//nolint:gosec // i is bounded by numWrites, well within rune range
+					Key:   string(rune(i)),
+					Value: "value",
 				})
 				assert.NoError(t, err)
 			}(i)
 		}
+
 		wg.Wait()
 
 		// Wait for worker to process all entries
 		time.Sleep(50 * time.Millisecond)
 
 		// Create new WAL instance to read entries
-		tw.wal.Close()
+		require.NoError(t, tw.wal.Close())
 		w, err := New(tw.cfg)
 		require.NoError(t, err)
-		defer w.Close()
+
+		defer func() {
+			if err := w.Close(); err != nil {
+				t.Logf("failed to close WAL: %v", err)
+			}
+		}()
 
 		// Verify all entries were written
 		entries, err := w.Recover()
@@ -247,10 +267,10 @@ func TestWrite_Errors(t *testing.T) {
 
 		err := tw.wal.Write(entry.Entry{
 			Operation: entry.OperationSet,
-			Key:       "key1",
-			Value:     "value1",
+			Key:       testKey1,
+			Value:     testValue1,
 		})
-		assert.NoError(t, err) // Write now always returns nil, as errors are handled in worker
+		require.NoError(t, err) // Write now always returns nil, as errors are handled in worker
 
 		// Small pause to ensure worker processed the command
 		time.Sleep(10 * time.Millisecond)
@@ -265,8 +285,8 @@ func TestClose(t *testing.T) {
 		// Write some entries
 		err := tw.wal.Write(entry.Entry{
 			Operation: entry.OperationSet,
-			Key:       "key1",
-			Value:     "value1",
+			Key:       testKey1,
+			Value:     testValue1,
 		})
 		require.NoError(t, err)
 
@@ -280,14 +300,19 @@ func TestClose(t *testing.T) {
 		// Create new WAL instance to verify entries
 		w, err := New(tw.cfg)
 		require.NoError(t, err)
-		defer w.Close()
+
+		defer func() {
+			if err := w.Close(); err != nil {
+				t.Logf("failed to close WAL: %v", err)
+			}
+		}()
 
 		// Verify entries were flushed
 		entries, err := w.Recover()
 		require.NoError(t, err)
 		require.Len(t, entries, 1)
-		assert.Equal(t, "key1", entries[0].Key)
-		assert.Equal(t, "value1", entries[0].Value)
+		assert.Equal(t, testKey1, entries[0].Key)
+		assert.Equal(t, testValue1, entries[0].Value)
 
 		// Cleanup at the end
 		tw.cleanup()
@@ -296,6 +321,7 @@ func TestClose(t *testing.T) {
 	t.Run("multiple close calls", func(t *testing.T) {
 		t.Parallel()
 		tw := setupWAL(t)
+
 		defer tw.cleanup()
 
 		err := tw.wal.Close()
@@ -320,8 +346,8 @@ func TestRecover(t *testing.T) {
 			MaxSegmentSizeBytes:  50,
 		}
 
-		tempDir, err := os.MkdirTemp("", "wal_test_*")
-		require.NoError(t, err)
+		tempDir := t.TempDir()
+
 		cfg.DataDirectory = tempDir
 
 		// Create WAL with pre-configured configuration
@@ -330,14 +356,15 @@ func TestRecover(t *testing.T) {
 
 		cleanup := func() {
 			if w != nil {
-				w.Close()
+				if err := w.Close(); err != nil {
+					t.Logf("failed to close WAL: %v", err)
+				}
 			}
-			os.RemoveAll(tempDir)
 		}
 		defer cleanup()
 
 		testEntries := []entry.Entry{
-			{Operation: entry.OperationSet, Key: "key1", Value: "value1"},
+			{Operation: entry.OperationSet, Key: testKey1, Value: testValue1},
 			{Operation: entry.OperationSet, Key: "key2", Value: "value2"},
 			{Operation: entry.OperationSet, Key: "key3", Value: "value3"},
 			{Operation: entry.OperationSet, Key: "key4", Value: "value4"},
@@ -372,6 +399,7 @@ func TestRecover(t *testing.T) {
 	t.Run("recover with empty directory", func(t *testing.T) {
 		t.Parallel()
 		tw := setupWAL(t)
+
 		defer tw.cleanup()
 
 		entries, err := tw.wal.Recover()
@@ -390,11 +418,11 @@ func TestRecover_Errors(t *testing.T) {
 		require.NoError(t, err)
 
 		// Создаем файл вместо директории
-		err = os.WriteFile(tw.cfg.DataDirectory, []byte("not a directory"), 0o644)
+		err = os.WriteFile(tw.cfg.DataDirectory, []byte("not a directory"), 0o600)
 		require.NoError(t, err)
 
 		entries, err := tw.wal.Recover()
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Nil(t, entries)
 	})
 
@@ -408,7 +436,7 @@ func TestRecover_Errors(t *testing.T) {
 		require.NoError(t, err)
 
 		entries, err := tw.wal.Recover()
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Nil(t, entries)
 	})
 }
@@ -426,8 +454,8 @@ func TestSegmentRotation(t *testing.T) {
 			MaxSegmentSizeBytes:  50, // Reduce segment size for guaranteed rotation
 		}
 
-		tempDir, err := os.MkdirTemp("", "wal_test_*")
-		require.NoError(t, err)
+		tempDir := t.TempDir()
+
 		cfg.DataDirectory = tempDir
 
 		// Create WAL with pre-configured configuration
@@ -436,9 +464,10 @@ func TestSegmentRotation(t *testing.T) {
 
 		cleanup := func() {
 			if w != nil {
-				w.Close()
+				if err := w.Close(); err != nil {
+					t.Logf("failed to close WAL: %v", err)
+				}
 			}
-			os.RemoveAll(tempDir)
 		}
 		defer cleanup()
 
@@ -454,21 +483,26 @@ func TestSegmentRotation(t *testing.T) {
 				Value:     "long_value_to_force_rotation",
 			})
 			require.NoError(t, err)
+
 			written[key] = true
 
 			// Check entry after each operation
 			time.Sleep(20 * time.Millisecond)
+
 			entries, err := w.Recover()
 			require.NoError(t, err)
 
 			// Check if entry was written
 			found := false
+
 			for _, e := range entries {
 				if e.Key == key {
 					found = true
+
 					break
 				}
 			}
+
 			require.True(t, found, "entry with key %s should be written", key)
 		}
 

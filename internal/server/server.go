@@ -2,6 +2,7 @@ package server
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"log/slog"
 	"net"
@@ -14,7 +15,7 @@ import (
 	"github.com/8thgencore/valchemy/pkg/logger/sl"
 )
 
-// Server is the server struct
+// Server is the server struct.
 type Server struct {
 	log           *slog.Logger
 	config        *config.NetworkConfig
@@ -25,7 +26,7 @@ type Server struct {
 	connCountLock sync.Mutex
 }
 
-// NewServer creates a new server
+// NewServer creates a new server.
 func NewServer(log *slog.Logger, config *config.NetworkConfig, handler *compute.Handler) *Server {
 	return &Server{
 		log:     log,
@@ -34,12 +35,15 @@ func NewServer(log *slog.Logger, config *config.NetworkConfig, handler *compute.
 	}
 }
 
-// Start starts the server
+// Start starts the server.
 func (s *Server) Start() error {
-	listener, err := net.Listen("tcp", s.config.Address)
+	var listenConfig net.ListenConfig
+
+	listener, err := listenConfig.Listen(context.Background(), "tcp", s.config.Address)
 	if err != nil {
 		return fmt.Errorf("failed to start server: %w", err)
 	}
+
 	s.listener = listener
 	s.log.Info("Server started", "address", s.config.Address)
 
@@ -47,11 +51,13 @@ func (s *Server) Start() error {
 		conn, err := listener.Accept()
 		if err != nil {
 			s.log.Error("Failed to accept connection", sl.Err(err))
+
 			continue
 		}
 
 		if !s.canAcceptConnection() {
 			s.log.Warn("Max connections reached, rejecting connection")
+
 			err := conn.Close()
 			if err != nil {
 				s.log.Error("Failed to close connection", sl.Err(err))
@@ -65,13 +71,14 @@ func (s *Server) Start() error {
 	}
 }
 
-// handleConnection handles a connection
+// handleConnection handles a connection.
 func (s *Server) handleConnection(conn net.Conn) {
 	defer func() {
 		err := conn.Close()
 		if err != nil {
 			s.log.Error("Failed to close connection", sl.Err(err))
 		}
+
 		s.connections.Done()
 		s.decrementConnCount()
 	}()
@@ -79,13 +86,16 @@ func (s *Server) handleConnection(conn net.Conn) {
 	s.log.Info("New connection established", "remote_addr", conn.RemoteAddr())
 
 	reader := bufio.NewReader(conn)
+
 	for {
 		input, err := reader.ReadString('\n')
 		if err != nil {
 			if err.Error() == "EOF" {
 				s.log.Info("Client disconnected", "remote_addr", conn.RemoteAddr())
+
 				return
 			}
+
 			s.log.Error("Failed to read from connection", sl.Err(err))
 
 			return
@@ -105,12 +115,13 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 		if _, err := conn.Write([]byte(response)); err != nil {
 			s.log.Error("Failed to write response", sl.Err(err))
+
 			return
 		}
 	}
 }
 
-// canAcceptConnection checks if the server can accept a new connection
+// canAcceptConnection checks if the server can accept a new connection.
 func (s *Server) canAcceptConnection() bool {
 	s.connCountLock.Lock()
 	defer s.connCountLock.Unlock()
@@ -124,7 +135,7 @@ func (s *Server) canAcceptConnection() bool {
 	return true
 }
 
-// decrementConnCount decrements the connection count
+// decrementConnCount decrements the connection count.
 func (s *Server) decrementConnCount() {
 	s.connCountLock.Lock()
 	s.connCount--

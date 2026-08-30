@@ -5,11 +5,12 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/8thgencore/valchemy/internal/config"
 	"github.com/golang-cz/devslog"
+
+	"github.com/8thgencore/valchemy/internal/config"
 )
 
-// New creates a new logger with configured formatting and logging level
+// New creates a new logger with configured formatting and logging level.
 func New(env config.Env) *slog.Logger {
 	var log *slog.Logger
 

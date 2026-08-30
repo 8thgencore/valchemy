@@ -8,18 +8,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const testEntryKey = "test-key"
+
 func TestEntry_WriteTo(t *testing.T) {
 	t.Run("write SET operation", func(t *testing.T) {
 		e := Entry{
 			Operation: OperationSet,
-			Key:       "test-key",
+			Key:       testEntryKey,
 			Value:     "test-value",
 		}
 
 		buf := new(bytes.Buffer)
 		n, err := e.WriteTo(buf)
 		require.NoError(t, err)
-		assert.Greater(t, n, int64(0))
+		assert.Positive(t, n)
 
 		// Verify reading written data
 		readEntry := &Entry{}
@@ -31,13 +33,13 @@ func TestEntry_WriteTo(t *testing.T) {
 	t.Run("write DELETE operation", func(t *testing.T) {
 		e := Entry{
 			Operation: OperationDelete,
-			Key:       "test-key",
+			Key:       testEntryKey,
 		}
 
 		buf := new(bytes.Buffer)
 		n, err := e.WriteTo(buf)
 		require.NoError(t, err)
-		assert.Greater(t, n, int64(0))
+		assert.Positive(t, n)
 
 		readEntry := &Entry{}
 		_, err = readEntry.ReadFrom(buf)
@@ -75,7 +77,9 @@ func TestEntry_ReadFrom(t *testing.T) {
 	t.Run("error on reading value length", func(t *testing.T) {
 		buf := new(bytes.Buffer)
 		buf.WriteByte(byte(OperationSet))
+
 		key := "test"
+		//nolint:gosec // key length is bounded by the small test fixture
 		buf.Write([]byte{byte(len(key)), 0, 0, 0})
 		buf.WriteString(key)
 		r := bytes.NewReader(buf.Bytes())
@@ -88,7 +92,9 @@ func TestEntry_ReadFrom(t *testing.T) {
 	t.Run("error on reading value", func(t *testing.T) {
 		buf := new(bytes.Buffer)
 		buf.WriteByte(byte(OperationSet))
+
 		key := "test"
+		//nolint:gosec // key length is bounded by the small test fixture
 		buf.Write([]byte{byte(len(key)), 0, 0, 0})
 		buf.WriteString(key)
 		buf.Write([]byte{5, 0, 0, 0}) // value length = 5
@@ -96,7 +102,7 @@ func TestEntry_ReadFrom(t *testing.T) {
 
 		e := &Entry{}
 		_, err := e.ReadFrom(r)
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 }
 
@@ -104,7 +110,7 @@ func TestReadEntry(t *testing.T) {
 	t.Run("successful read", func(t *testing.T) {
 		original := &Entry{
 			Operation: OperationSet,
-			Key:       "test-key",
+			Key:       testEntryKey,
 			Value:     "test-value",
 		}
 
@@ -120,7 +126,7 @@ func TestReadEntry(t *testing.T) {
 	t.Run("error on read", func(t *testing.T) {
 		r := bytes.NewReader([]byte{})
 		entry, err := ReadEntry(r)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Nil(t, entry)
 	})
 }
