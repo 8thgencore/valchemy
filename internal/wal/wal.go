@@ -130,7 +130,7 @@ func (w *Service) worker() {
 		select {
 		case cmd, ok := <-w.commands:
 			if !ok {
-				flushBatchIfNeeded(&batch, w, &cmd)
+				flushBatchIfNeeded(&batch, w, nil)
 				close(w.done)
 
 				return
