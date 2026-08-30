@@ -7,17 +7,17 @@ import (
 	"github.com/ilyakaznacheev/cleanenv"
 )
 
-// Env type for environment
+// Env type for environment.
 type Env string
 
 const (
-	// Dev is the development environment
+	// Dev is the development environment.
 	Dev Env = "dev"
-	// Prod is the production environment
+	// Prod is the production environment.
 	Prod Env = "prod"
 )
 
-// Config is the configuration for the application
+// Config is the configuration for the application.
 type Config struct {
 	Env         Env `env:"ENV" env-default:"dev"`
 	Engine      EngineConfig
@@ -27,55 +27,55 @@ type Config struct {
 	Replication ReplicationConfig
 }
 
-// EngineConfig is the configuration for the engine
+// EngineConfig is the configuration for the engine.
 type EngineConfig struct {
-	Type string `yaml:"type" env-default:"in_memory"`
+	Type string `env-default:"in_memory" yaml:"type"`
 }
 
-// NetworkConfig is the configuration for the network
+// NetworkConfig is the configuration for the network.
 type NetworkConfig struct {
-	Address        string        `yaml:"address" env-default:"127.0.0.1:3223"`
-	MaxConnections int           `yaml:"max_connections" env-default:"100"`
-	MaxMessageSize string        `yaml:"max_message_size" env-default:"4KB"`
-	IdleTimeout    time.Duration `yaml:"idle_timeout" env-default:"5m"`
+	Address        string        `env-default:"127.0.0.1:3223" yaml:"address"`
+	MaxConnections int           `env-default:"100"            yaml:"max_connections"`
+	MaxMessageSize string        `env-default:"4KB"            yaml:"max_message_size"`
+	IdleTimeout    time.Duration `env-default:"5m"             yaml:"idle_timeout"`
 }
 
-// LoggingConfig is the configuration for the logging
+// LoggingConfig is the configuration for the logging.
 type LoggingConfig struct {
-	Level  string `yaml:"level" env-default:"info"`
-	Output string `yaml:"output" env-default:"stdout"`
-	Format string `yaml:"format" env-default:"text"`
+	Level  string `env-default:"info"   yaml:"level"`
+	Output string `env-default:"stdout" yaml:"output"`
+	Format string `env-default:"text"   yaml:"format"`
 }
 
-// WALConfig configures the Write-Ahead Logging (WAL)
+// WALConfig configures the Write-Ahead Logging (WAL).
 type WALConfig struct {
-	Enabled              bool          `yaml:"enabled" env-default:"false"`
-	FlushingBatchSize    int           `yaml:"flushing_batch_size" env-default:"100"`
-	FlushingBatchTimeout time.Duration `yaml:"flushing_batch_timeout" env-default:"10ms"`
-	MaxSegmentSize       string        `yaml:"max_segment_size" env-default:"10MB"`
+	Enabled              bool          `env-default:"false"      yaml:"enabled"`
+	FlushingBatchSize    int           `env-default:"100"        yaml:"flushing_batch_size"`
+	FlushingBatchTimeout time.Duration `env-default:"10ms"       yaml:"flushing_batch_timeout"`
+	MaxSegmentSize       string        `env-default:"10MB"       yaml:"max_segment_size"`
 	MaxSegmentSizeBytes  uint64        `yaml:"-"` // calculated field
-	DataDirectory        string        `yaml:"data_directory" env-default:"./data/wal"`
+	DataDirectory        string        `env-default:"./data/wal" yaml:"data_directory"`
 }
 
-// ReplicationType defines the type of replication node
+// ReplicationType defines the type of replication node.
 type ReplicationType string
 
 const (
-	// Master is the leader node that accepts writes
+	// Master is the leader node that accepts writes.
 	Master ReplicationType = "master"
-	// Replica is the follower node that replicates from master
+	// Replica is the follower node that replicates from master.
 	Replica ReplicationType = "replica"
 )
 
-// ReplicationConfig configures the replication settings
+// ReplicationConfig configures the replication settings.
 type ReplicationConfig struct {
-	ReplicaType     ReplicationType `yaml:"replica_type" env-default:"master"`
+	ReplicaType     ReplicationType `env-default:"master"         yaml:"replica_type"`
 	MasterHost      string          `yaml:"master_host,omitempty"`
-	ReplicationPort string          `yaml:"replication_port" env-default:"3233"`
-	SyncInterval    time.Duration   `yaml:"sync_interval" env-default:"1s"`
-	SyncRetryDelay  time.Duration   `yaml:"sync_retry_delay" env-default:"500ms"`
-	SyncRetryCount  int             `yaml:"sync_retry_count" env-default:"3"`
-	ReadTimeout     time.Duration   `yaml:"read_timeout" env-default:"10s"`
+	ReplicationPort string          `env-default:"3233"           yaml:"replication_port"`
+	SyncInterval    time.Duration   `env-default:"1s"             yaml:"sync_interval"`
+	SyncRetryDelay  time.Duration   `env-default:"500ms"          yaml:"sync_retry_delay"`
+	SyncRetryCount  int             `env-default:"3"              yaml:"sync_retry_count"`
+	ReadTimeout     time.Duration   `env-default:"10s"            yaml:"read_timeout"`
 }
 
 // NewConfig creates a new instance of Config.
@@ -97,6 +97,7 @@ func NewConfig(path string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse max segment size: %w", err)
 	}
+
 	cfg.WAL.MaxSegmentSizeBytes = maxSegmentSizeBytes
 
 	return cfg, nil

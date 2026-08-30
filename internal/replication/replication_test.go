@@ -3,15 +3,17 @@
 package replication
 
 import (
+	"context"
 	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/8thgencore/valchemy/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/8thgencore/valchemy/internal/config"
 )
 
 func TestSafeReadSegment(t *testing.T) {
@@ -48,7 +50,7 @@ func TestSafeReadSegment(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if !tt.expectError {
-				err := os.MkdirAll(tt.walDir, 0o755)
+				err := os.MkdirAll(tt.walDir, 0o750)
 				require.NoError(t, err)
 
 				fullPath := filepath.Join(tt.walDir, tt.segName)
@@ -58,10 +60,10 @@ func TestSafeReadSegment(t *testing.T) {
 
 			data, err := safeReadSegment(tt.walDir, tt.segName)
 			if tt.expectError {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Nil(t, data)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tt.content, string(data))
 			}
 		})
@@ -71,7 +73,8 @@ func TestSafeReadSegment(t *testing.T) {
 func TestMasterReplication(t *testing.T) {
 	walDir := t.TempDir()
 	segDir := filepath.Join(walDir, "segments")
-	require.NoError(t, os.MkdirAll(segDir, 0o755))
+	require.NoError(t, os.MkdirAll(segDir, 0o750))
+
 	cfg := config.ReplicationConfig{
 		ReplicaType:     config.Master,
 		MasterHost:      "127.0.0.1",
@@ -86,9 +89,16 @@ func TestMasterReplication(t *testing.T) {
 	require.NoError(t, err)
 
 	// Try to connect as a client
-	conn, err := net.Dial("tcp", "127.0.0.1:13234")
+	var dialer net.Dialer
+
+	conn, err := dialer.DialContext(context.Background(), "tcp", "127.0.0.1:13234")
 	require.NoError(t, err)
-	defer conn.Close()
+
+	defer func() {
+		if err := conn.Close(); err != nil {
+			t.Logf("failed to close connection: %v", err)
+		}
+	}()
 
 	// Verify connection
 	assert.NotNil(t, conn)

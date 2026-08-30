@@ -29,8 +29,11 @@ func parseSize(sizeStr string) (uint64, error) {
 		{"B", 1},
 	}
 
-	var numStr string
-	var mult uint64 = 1
+	var (
+		numStr string
+		mult   uint64 = 1
+	)
+
 	found := false
 
 	for _, s := range suffixes {
@@ -38,6 +41,7 @@ func parseSize(sizeStr string) (uint64, error) {
 			numStr = before
 			mult = s.mult
 			found = true
+
 			break
 		}
 	}
@@ -46,6 +50,7 @@ func parseSize(sizeStr string) (uint64, error) {
 		if !isDigits(sizeStr) {
 			return 0, fmt.Errorf("invalid format: %q", sizeStr)
 		}
+
 		numStr = sizeStr
 	}
 
@@ -62,7 +67,7 @@ func parseSize(sizeStr string) (uint64, error) {
 	return result, nil
 }
 
-// isDigits checks if string contains only digits (0-9)
+// isDigits checks if string contains only digits (0-9).
 func isDigits(s string) bool {
 	return regexp.MustCompile(`^\d+$`).MatchString(s)
 }

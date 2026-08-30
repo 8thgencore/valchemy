@@ -4,7 +4,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+const testKey1 = "key1"
 
 func TestParseCommand(t *testing.T) {
 	tests := []struct {
@@ -20,7 +23,7 @@ func TestParseCommand(t *testing.T) {
 		},
 		{
 			name:    "Command without arguments",
-			input:   "GET",
+			input:   CommandGet,
 			wantErr: ErrInvalidFormat,
 		},
 		{
@@ -28,7 +31,7 @@ func TestParseCommand(t *testing.T) {
 			input: "GET key1",
 			wantCmd: Command{
 				Type: "GET",
-				Args: []string{"key1"},
+				Args: []string{testKey1},
 			},
 		},
 		{
@@ -36,7 +39,7 @@ func TestParseCommand(t *testing.T) {
 			input: "SET key1 value1",
 			wantCmd: Command{
 				Type: "SET",
-				Args: []string{"key1", "value1"},
+				Args: []string{testKey1, "value1"},
 			},
 		},
 		{
@@ -49,7 +52,7 @@ func TestParseCommand(t *testing.T) {
 			input: "DEL key1",
 			wantCmd: Command{
 				Type: "DEL",
-				Args: []string{"key1"},
+				Args: []string{testKey1},
 			},
 		},
 		{
@@ -64,9 +67,11 @@ func TestParseCommand(t *testing.T) {
 			cmd, err := ParseCommand(tt.input)
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
+
 				return
 			}
-			assert.NoError(t, err)
+
+			require.NoError(t, err)
 			assert.Equal(t, tt.wantCmd, cmd)
 		})
 	}

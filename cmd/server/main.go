@@ -11,6 +11,7 @@ import (
 func main() {
 	// Parse command line flags
 	configPath := flag.String("config", "config.yaml", "path to config file")
+
 	flag.Parse()
 
 	// Create and run application
@@ -21,6 +22,7 @@ func main() {
 	}
 
 	// Run application
+	//nolint:staticcheck // Run() blocks forever and only returns on a fatal error; the nil check guards future graceful-shutdown support.
 	if err := application.Run(); err != nil {
 		log.Printf("Application error: %v", err)
 		os.Exit(1)

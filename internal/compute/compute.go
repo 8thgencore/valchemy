@@ -7,14 +7,14 @@ import (
 	"github.com/8thgencore/valchemy/internal/storage"
 )
 
-// Handler is a struct that handles commands
+// Handler is a struct that handles commands.
 type Handler struct {
 	log         *slog.Logger
 	engine      *storage.Engine
 	replicaType config.ReplicationType
 }
 
-// NewHandler creates a new Handler
+// NewHandler creates a new Handler.
 func NewHandler(log *slog.Logger, engine *storage.Engine, replicaType config.ReplicationType) *Handler {
 	return &Handler{
 		log:         log,
@@ -23,7 +23,7 @@ func NewHandler(log *slog.Logger, engine *storage.Engine, replicaType config.Rep
 	}
 }
 
-// Handle handles a command string
+// Handle handles a command string.
 func (h *Handler) Handle(input string) (string, error) {
 	// If input is empty, do nothing
 	if input == "" {
@@ -40,7 +40,7 @@ func (h *Handler) Handle(input string) (string, error) {
 	return h.handleCommand(cmd)
 }
 
-// handleCommand handles a parsed command (exported for testing)
+// handleCommand handles a parsed command (exported for testing).
 func (h *Handler) handleCommand(cmd Command) (string, error) {
 	// Check if we're on replica and command is not allowed
 	if h.replicaType == config.Replica {
@@ -57,9 +57,11 @@ func (h *Handler) handleCommand(cmd Command) (string, error) {
 		return HelpMessage, nil
 
 	case CommandSet:
-		if err := h.engine.Set(cmd.Args[0], cmd.Args[1]); err != nil {
+		err := h.engine.Set(cmd.Args[0], cmd.Args[1])
+		if err != nil {
 			return "", err
 		}
+
 		return ResponseOK, nil
 
 	case CommandGet:
@@ -67,18 +69,23 @@ func (h *Handler) handleCommand(cmd Command) (string, error) {
 		if !ok {
 			return "", ErrKeyNotFound
 		}
+
 		return value, nil
 
 	case CommandDel:
-		if err := h.engine.Delete(cmd.Args[0]); err != nil {
+		err := h.engine.Delete(cmd.Args[0])
+		if err != nil {
 			return "", err
 		}
+
 		return ResponseOK, nil
 
 	case CommandClear:
-		if err := h.engine.Clear(); err != nil {
+		err := h.engine.Clear()
+		if err != nil {
 			return "", err
 		}
+
 		return ResponseOK, nil
 	}
 

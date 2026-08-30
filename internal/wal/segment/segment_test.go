@@ -6,22 +6,21 @@ import (
 	"testing"
 	"time"
 
-	"github.com/8thgencore/valchemy/internal/wal/entry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/8thgencore/valchemy/internal/wal/entry"
 )
 
 func setupTestDir(t *testing.T) string {
 	t.Helper()
-	dir, err := os.MkdirTemp("", "segment_test_*")
-	require.NoError(t, err)
-	return dir
+
+	return t.TempDir()
 }
 
 func TestNewSegment(t *testing.T) {
 	t.Run("Successfully create segment", func(t *testing.T) {
 		dir := setupTestDir(t)
-		defer os.RemoveAll(dir)
 
 		s, err := NewSegment(dir)
 		require.NoError(t, err)
@@ -40,7 +39,6 @@ func TestNewSegment(t *testing.T) {
 func TestSegment_CreateSegmentFile(t *testing.T) {
 	t.Run("Successfully create file", func(t *testing.T) {
 		dir := setupTestDir(t)
-		defer os.RemoveAll(dir)
 
 		s, err := NewSegment(dir)
 		require.NoError(t, err)
@@ -56,13 +54,11 @@ func TestSegment_CreateSegmentFile(t *testing.T) {
 	})
 
 	t.Run("error creating file without permissions", func(t *testing.T) {
-		tempDir, err := os.MkdirTemp("", "segment_test_*")
-		require.NoError(t, err)
-		defer os.RemoveAll(tempDir)
+		tempDir := t.TempDir()
 
 		// Создаем файл
 		testFile := filepath.Join(tempDir, "test.log")
-		err = os.WriteFile(testFile, []byte("existing file"), 0o644)
+		err := os.WriteFile(testFile, []byte("existing file"), 0o600)
 		require.NoError(t, err)
 
 		s := &segment{
@@ -79,7 +75,6 @@ func TestSegment_CreateSegmentFile(t *testing.T) {
 func TestSegment_Write(t *testing.T) {
 	t.Run("successful write", func(t *testing.T) {
 		dir := setupTestDir(t)
-		defer os.RemoveAll(dir)
 
 		s, err := NewSegment(dir)
 		require.NoError(t, err)
@@ -92,14 +87,13 @@ func TestSegment_Write(t *testing.T) {
 
 		err = s.Write(e)
 		require.NoError(t, err)
-		assert.Greater(t, s.Size(), uint64(0))
+		assert.Positive(t, s.Size())
 	})
 }
 
 func TestSegment_Sync(t *testing.T) {
 	t.Run("successful synchronization", func(t *testing.T) {
 		dir := setupTestDir(t)
-		defer os.RemoveAll(dir)
 
 		s, err := NewSegment(dir)
 		require.NoError(t, err)
@@ -121,7 +115,6 @@ func TestSegment_Sync(t *testing.T) {
 func TestListSegments(t *testing.T) {
 	t.Run("successful get list of segments", func(t *testing.T) {
 		dir := setupTestDir(t)
-		defer os.RemoveAll(dir)
 
 		// Create several segments
 		for range 3 {
@@ -139,7 +132,6 @@ func TestListSegments(t *testing.T) {
 
 	t.Run("empty directory", func(t *testing.T) {
 		dir := setupTestDir(t)
-		defer os.RemoveAll(dir)
 
 		segments, err := ListSegments(dir)
 		require.NoError(t, err)
@@ -155,7 +147,6 @@ func TestListSegments(t *testing.T) {
 func TestReadSegmentEntries(t *testing.T) {
 	t.Run("successful read entries", func(t *testing.T) {
 		dir := setupTestDir(t)
-		defer os.RemoveAll(dir)
 
 		s, err := NewSegment(dir)
 		require.NoError(t, err)
@@ -170,6 +161,7 @@ func TestReadSegmentEntries(t *testing.T) {
 			err = s.Write(e)
 			require.NoError(t, err)
 		}
+
 		require.NoError(t, s.Sync())
 		require.NoError(t, s.Close())
 
@@ -181,16 +173,14 @@ func TestReadSegmentEntries(t *testing.T) {
 
 	t.Run("error reading non-existent file", func(t *testing.T) {
 		dir := setupTestDir(t)
-		defer os.RemoveAll(dir)
 
 		entries, err := ReadSegmentEntries(dir, "nonexistent.log")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Nil(t, entries)
 	})
 
 	t.Run("error reading corrupted file", func(t *testing.T) {
 		dir := setupTestDir(t)
-		defer os.RemoveAll(dir)
 
 		// Create a corrupted file
 		filename := filepath.Join(dir, "corrupted.log")
@@ -198,7 +188,7 @@ func TestReadSegmentEntries(t *testing.T) {
 		require.NoError(t, err)
 
 		entries, err := ReadSegmentEntries(dir, "corrupted.log")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Nil(t, entries)
 	})
 }

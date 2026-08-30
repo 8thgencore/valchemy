@@ -2,18 +2,19 @@ package segment
 
 import (
 	"bufio"
+	"cmp"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/8thgencore/valchemy/internal/wal/entry"
 )
 
-// Segment represents a WAL Segment file
+// Segment represents a WAL Segment file.
 type segment struct {
 	file      *os.File
 	writer    *bufio.Writer
@@ -22,9 +23,10 @@ type segment struct {
 	directory string
 }
 
-// NewSegment creates a new WAL segment
+// NewSegment creates a new WAL segment.
 func NewSegment(directory string) (*segment, error) {
-	if err := os.MkdirAll(directory, 0o750); err != nil {
+	err := os.MkdirAll(directory, 0o750)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create WAL directory: %w", err)
 	}
 
@@ -37,7 +39,7 @@ func NewSegment(directory string) (*segment, error) {
 	}, nil
 }
 
-// Write writes data to the segment and updates its size
+// Write writes data to the segment and updates its size.
 func (s *segment) Write(entry entry.Entry) error {
 	if err := s.CreateSegmentFile(); err != nil {
 		return fmt.Errorf("failed to create segment file: %w", err)
@@ -51,53 +53,58 @@ func (s *segment) Write(entry entry.Entry) error {
 	if n < 0 {
 		return fmt.Errorf("negative write size: %d", n)
 	}
+
 	newSize := s.size + uint64(n)
 	if newSize < s.size {
 		return errors.New("size overflow detected")
 	}
+
 	s.size = newSize
 
 	return nil
 }
 
-// Sync ensures all data is written to disk
+// Sync ensures all data is written to disk.
 func (s *segment) Sync() error {
 	if s.file == nil {
 		return nil
 	}
 
-	if err := s.writer.Flush(); err != nil {
+	err := s.writer.Flush()
+	if err != nil {
 		return fmt.Errorf("failed to flush buffer: %w", err)
 	}
 
 	return s.file.Sync()
 }
 
-// Close closes the segment file
+// Close closes the segment file.
 func (s *segment) Close() error {
 	if s.file == nil {
 		return nil
 	}
 
-	if err := s.writer.Flush(); err != nil {
+	err := s.writer.Flush()
+	if err != nil {
 		return fmt.Errorf("failed to flush buffer on close: %w", err)
 	}
 
 	return s.file.Close()
 }
 
-// Size returns the size of the segment
+// Size returns the size of the segment.
 func (s *segment) Size() uint64 {
 	return s.size
 }
 
-// CreateSegmentFile creates a new segment file if it doesn't exist
+// CreateSegmentFile creates a new segment file if it doesn't exist.
 func (s *segment) CreateSegmentFile() error {
 	if s.file == nil {
 		file, err := os.OpenFile(s.filename, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o600)
 		if err != nil {
 			return fmt.Errorf("failed to create segment file: %w", err)
 		}
+
 		s.file = file
 		s.writer = bufio.NewWriter(file)
 	}
@@ -105,7 +112,7 @@ func (s *segment) CreateSegmentFile() error {
 	return nil
 }
 
-// ListSegments returns a sorted list of WAL segment infos
+// ListSegments returns a sorted list of WAL segment infos.
 func ListSegments(directory string) ([]Info, error) {
 	files, err := os.ReadDir(directory)
 	if err != nil {
@@ -113,6 +120,7 @@ func ListSegments(directory string) ([]Info, error) {
 	}
 
 	var segments []Info
+
 	for _, f := range files {
 		name := f.Name()
 		if !strings.Contains(name, "..") &&
@@ -122,19 +130,20 @@ func ListSegments(directory string) ([]Info, error) {
 			if err != nil {
 				continue // Skip invalid segment names
 			}
+
 			segments = append(segments, info)
 		}
 	}
 
 	// Sort segments by ID
-	sort.Slice(segments, func(i, j int) bool {
-		return segments[i].ID < segments[j].ID
+	slices.SortFunc(segments, func(a, b Info) int {
+		return cmp.Compare(a.ID, b.ID)
 	})
 
 	return segments, nil
 }
 
-// ReadSegmentEntries reads all entries from the given segment file
+// ReadSegmentEntries reads all entries from the given segment file.
 func ReadSegmentEntries(directory, segmentName string) ([]*entry.Entry, error) {
 	// Validate and sanitize the input paths
 	segmentPath := filepath.Join(directory, segmentName)
@@ -146,20 +155,24 @@ func ReadSegmentEntries(directory, segmentName string) ([]*entry.Entry, error) {
 	}
 
 	defer func() {
-		if closeErr := file.Close(); closeErr != nil {
+		closeErr := file.Close()
+		if closeErr != nil {
 			err = fmt.Errorf("failed to close segment file: %w", closeErr)
 		}
 	}()
 
 	var entries []*entry.Entry
+
 	for {
 		entry, err := entry.ReadEntry(file)
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
+
 		if err != nil {
 			return nil, fmt.Errorf("failed to read entry from segment %s: %w", segmentName, err)
 		}
+
 		entries = append(entries, entry)
 	}
 

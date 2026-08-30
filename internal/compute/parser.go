@@ -4,13 +4,13 @@ import (
 	"strings"
 )
 
-// Command is a struct that represents a command
+// Command is a struct that represents a command.
 type Command struct {
 	Type string
 	Args []string
 }
 
-// ParseCommand parses a command string into a Command struct
+// ParseCommand parses a command string into a Command struct.
 func ParseCommand(input string) (Command, error) {
 	parts := strings.Fields(input)
 	if len(parts) == 0 {
@@ -30,14 +30,15 @@ func ParseCommand(input string) (Command, error) {
 		Args: parts[1:],
 	}
 
-	if err := validateCommand(cmd); err != nil {
+	err := validateCommand(cmd)
+	if err != nil {
 		return Command{}, err
 	}
 
 	return cmd, nil
 }
 
-// validateCommand validates a command
+// validateCommand validates a command.
 func validateCommand(cmd Command) error {
 	switch cmd.Type {
 	case CommandSet:

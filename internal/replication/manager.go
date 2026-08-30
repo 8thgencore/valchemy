@@ -8,7 +8,7 @@ import (
 	"github.com/8thgencore/valchemy/internal/config"
 )
 
-// Manager handles replication logic for both master and replica nodes
+// Manager handles replication logic for both master and replica nodes.
 type Manager struct {
 	cfg    config.ReplicationConfig
 	log    *slog.Logger
@@ -16,7 +16,7 @@ type Manager struct {
 	conn   net.Conn
 }
 
-// New creates a new replication manager
+// New creates a new replication manager.
 func New(cfg config.ReplicationConfig, log *slog.Logger, walDir string) *Manager {
 	return &Manager{
 		cfg:    cfg,
@@ -25,7 +25,7 @@ func New(cfg config.ReplicationConfig, log *slog.Logger, walDir string) *Manager
 	}
 }
 
-// Start starts the replication manager
+// Start starts the replication manager.
 func (m *Manager) Start() error {
 	switch m.cfg.ReplicaType {
 	case config.Master:

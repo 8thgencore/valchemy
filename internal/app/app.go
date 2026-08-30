@@ -13,7 +13,7 @@ import (
 	"github.com/8thgencore/valchemy/pkg/logger"
 )
 
-// App represents the main application
+// App represents the main application.
 type App struct {
 	cfg        *config.Config
 	log        *slog.Logger
@@ -21,7 +21,7 @@ type App struct {
 	replicator *replication.Manager
 }
 
-// New creates a new instance of the application
+// New creates a new instance of the application.
 func New(configPath string) (*App, error) {
 	// Load configuration
 	cfg, err := config.NewConfig(configPath)
@@ -58,12 +58,13 @@ func New(configPath string) (*App, error) {
 	}, nil
 }
 
-// Run starts the application
+// Run starts the application.
 func (a *App) Run() error {
 	a.log.Info("Starting application", "env", a.cfg.Env)
 
 	// Start replication if enabled
-	if err := a.replicator.Start(); err != nil {
+	err := a.replicator.Start()
+	if err != nil {
 		return fmt.Errorf("failed to start replication: %w", err)
 	}
 

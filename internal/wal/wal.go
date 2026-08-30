@@ -37,12 +37,13 @@ type command struct {
 // Returns nil if WAL is disabled in the configuration.
 func New(cfg config.WALConfig) (*Service, error) {
 	if !cfg.Enabled {
+		//nolint:nilnil // a nil Service with a nil error is the documented way to signal a disabled WAL.
 		return nil, nil
 	}
 
 	segment, err := segment.NewSegment(cfg.DataDirectory)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrCreateSegment, err)
+		return nil, fmt.Errorf("%w: %w", ErrCreateSegment, err)
 	}
 
 	w := &Service{
@@ -67,45 +68,7 @@ func New(cfg config.WALConfig) (*Service, error) {
 	return w, nil
 }
 
-func (w *Service) worker() {
-	batch := make([]entry.Entry, 0, w.config.batchSize)
-	timer := time.NewTimer(w.config.batchTimeout)
-	defer timer.Stop()
-
-	for {
-		select {
-		case cmd, ok := <-w.commands:
-			if !ok {
-				flushBatchIfNeeded(&batch, w, &cmd)
-				close(w.done)
-				return
-			}
-			batch = append(batch, cmd.entry)
-			if len(batch) >= w.config.batchSize {
-				flushBatchIfNeeded(&batch, w, &cmd)
-				timer.Reset(w.config.batchTimeout)
-			} else {
-				cmd.done <- nil
-			}
-		case <-timer.C:
-			flushBatchIfNeeded(&batch, w, nil)
-			timer.Reset(w.config.batchTimeout)
-		}
-	}
-}
-
-func flushBatchIfNeeded(batch *[]entry.Entry, w *Service, cmd *command) {
-	if len(*batch) > 0 {
-		if err := w.flush(*batch); err != nil && cmd != nil {
-			cmd.done <- err
-		} else if cmd != nil {
-			cmd.done <- nil
-		}
-		*batch = (*batch)[:0]
-	}
-}
-
-// Write adds an entry to the WAL batch and ensures it's written to disk
+// Write adds an entry to the WAL batch and ensures it's written to disk.
 func (w *Service) Write(entry entry.Entry) error {
 	select {
 	case <-w.done:
@@ -122,49 +85,7 @@ func (w *Service) Write(entry entry.Entry) error {
 	}
 }
 
-// flush writes the current batch to disk and manages segment rotation.
-func (w *Service) flush(batch []entry.Entry) error {
-	if len(batch) == 0 {
-		return nil
-	}
-
-	// Write entries and handle segment rotation
-	for _, entry := range batch {
-		if err := w.currentSegment.Write(entry); err != nil {
-			return fmt.Errorf("%w: %v", ErrWriteEntry, err)
-		}
-
-		if w.currentSegment.Size() >= w.config.maxSegmentSize {
-			if err := w.rotateSegment(); err != nil {
-				return fmt.Errorf("%w: %v", ErrRotateSegment, err)
-			}
-		}
-	}
-
-	// Ensure durability by syncing to disk
-	if err := w.currentSegment.Sync(); err != nil {
-		return fmt.Errorf("%w: %v", ErrSyncWAL, err)
-	}
-
-	return nil
-}
-
-// rotateSegment creates a new segment and closes the current one
-func (w *Service) rotateSegment() error {
-	if err := w.currentSegment.Close(); err != nil {
-		return fmt.Errorf("%w: %v", ErrCloseSegment, err)
-	}
-
-	segment, err := segment.NewSegment(w.config.dataDirectory)
-	if err != nil {
-		return err
-	}
-	w.currentSegment = segment
-
-	return nil
-}
-
-// Close closes the WAL
+// Close closes the WAL.
 func (w *Service) Close() error {
 	select {
 	case <-w.done:
@@ -178,7 +99,7 @@ func (w *Service) Close() error {
 	return w.currentSegment.Close()
 }
 
-// Recover reads all WAL segments and returns entries for recovery
+// Recover reads all WAL segments and returns entries for recovery.
 func (w *Service) Recover() ([]*entry.Entry, error) {
 	var entries []*entry.Entry
 
@@ -192,8 +113,98 @@ func (w *Service) Recover() ([]*entry.Entry, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		entries = append(entries, segmentEntries...)
 	}
 
 	return entries, nil
+}
+
+func (w *Service) worker() {
+	batch := make([]entry.Entry, 0, w.config.batchSize)
+	timer := time.NewTimer(w.config.batchTimeout)
+
+	defer timer.Stop()
+
+	for {
+		select {
+		case cmd, ok := <-w.commands:
+			if !ok {
+				flushBatchIfNeeded(&batch, w, &cmd)
+				close(w.done)
+
+				return
+			}
+
+			batch = append(batch, cmd.entry)
+			if len(batch) >= w.config.batchSize {
+				flushBatchIfNeeded(&batch, w, &cmd)
+				timer.Reset(w.config.batchTimeout)
+			} else {
+				cmd.done <- nil
+			}
+		case <-timer.C:
+			flushBatchIfNeeded(&batch, w, nil)
+			timer.Reset(w.config.batchTimeout)
+		}
+	}
+}
+
+func flushBatchIfNeeded(batch *[]entry.Entry, w *Service, cmd *command) {
+	if len(*batch) > 0 {
+		err := w.flush(*batch)
+		if err != nil && cmd != nil {
+			cmd.done <- err
+		} else if cmd != nil {
+			cmd.done <- nil
+		}
+
+		*batch = (*batch)[:0]
+	}
+}
+
+// flush writes the current batch to disk and manages segment rotation.
+func (w *Service) flush(batch []entry.Entry) error {
+	if len(batch) == 0 {
+		return nil
+	}
+
+	// Write entries and handle segment rotation
+	for _, entry := range batch {
+		err := w.currentSegment.Write(entry)
+		if err != nil {
+			return fmt.Errorf("%w: %w", ErrWriteEntry, err)
+		}
+
+		if w.currentSegment.Size() >= w.config.maxSegmentSize {
+			err := w.rotateSegment()
+			if err != nil {
+				return fmt.Errorf("%w: %w", ErrRotateSegment, err)
+			}
+		}
+	}
+
+	// Ensure durability by syncing to disk
+	err := w.currentSegment.Sync()
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrSyncWAL, err)
+	}
+
+	return nil
+}
+
+// rotateSegment creates a new segment and closes the current one.
+func (w *Service) rotateSegment() error {
+	if err := w.currentSegment.Close(); err != nil {
+		return fmt.Errorf("%w: %w", ErrCloseSegment, err)
+	}
+
+	segment, err := segment.NewSegment(w.config.dataDirectory)
+	if err != nil {
+		return err
+	}
+
+	w.currentSegment = segment
+
+	return nil
 }

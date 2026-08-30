@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 )
 
-// safeReadSegment safely reads a WAL segment file after path validation
-func safeReadSegment(walDir, segName string) ([]byte, error) {
+// safeReadSegment safely reads a WAL segment file after path validation.
+func safeReadSegment(walDir, segName string) (data []byte, err error) {
 	// Clean and normalize paths
 	walDir = filepath.Clean(walDir)
 	fullPath := filepath.Join(walDir, segName)
@@ -18,9 +18,10 @@ func safeReadSegment(walDir, segName string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
+
 	defer func() {
-		if err := file.Close(); err != nil {
-			fmt.Printf("failed to close file: %s", err)
+		if closeErr := file.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("failed to close file: %w", closeErr)
 		}
 	}()
 
@@ -31,7 +32,8 @@ func safeReadSegment(walDir, segName string) ([]byte, error) {
 	}
 
 	// Read the file content
-	data := make([]byte, info.Size())
+	data = make([]byte, info.Size())
+
 	_, err = file.Read(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
